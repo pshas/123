@@ -1,24 +1,92 @@
-# 123
-123
-Проблема с тем, что модальное окно открывается до нажатия кнопки "Оформить", может быть вызвана тем, что код, отвечающий за открытие модального окна, выполняется раньше, чем ожидается.
+Чтобы добавить указанные поля в модальное окно, необходимо обновить HTML форму в модальном окне, добавив новые поля для ввода. Каждый из этих полей будет принимать информацию от пользователя и затем отправлять её на сервер для обработки.
 
-Для корректной работы нужно убедиться, что вызов функции `openSubmitModal()` происходит только при нажатии на кнопку "Оформить". Проверьте, как в таблице генерируются кнопки "Оформить", и как к ним привязывается функция JavaScript.
+### Обновленный код модального окна с дополнительными полями:
 
-### 1. Правильное генерирование кнопки "Оформить" в PHP
+```html
+<!-- Модальное окно -->
+<div class="modal fade" id="submitModal" tabindex="-1" role="dialog" aria-labelledby="submitModalLabel" aria-hidden="true">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="submitModalLabel">Оформить заявку</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>Заполните необходимые данные для оформления заявки:</p>
+        
+        <!-- Форма для отправки -->
+        <form id="submitForm">
+          <!-- Скрытое поле для ID шаблона -->
+          <input type="hidden" name="template_id" id="templateId" value="">
 
-В таблице нужно создать кнопку, которая при нажатии передает ID шаблона в функцию `openSubmitModal()`. Например:
+          <!-- Объект исследования -->
+          <div class="form-group">
+            <label for="research_object">Объект исследования</label>
+            <input type="text" class="form-control" name="research_object" id="research_object" required>
+          </div>
 
-```php
-echo "<td>
-        <button class='btn btn-success btn-sm' onclick='openSubmitModal(" . $row['id'] . ")'>Оформить</button>
-      </td>";
+          <!-- Инициатор -->
+          <div class="form-group">
+            <label for="initiator">Инициатор</label>
+            <input type="text" class="form-control" name="initiator" id="initiator" required>
+          </div>
+
+          <!-- Дата создания (поле только для отображения) -->
+          <div class="form-group">
+            <label for="created_at">Создано</label>
+            <input type="text" class="form-control" name="created_at" id="created_at" value="<?php echo date('Y-m-d H:i:s'); ?>" readonly>
+          </div>
+
+          <!-- Причина обращения -->
+          <div class="form-group">
+            <label for="reason">Причина обращения</label>
+            <input type="text" class="form-control" name="reason" id="reason" required>
+          </div>
+
+          <!-- Цель испытаний и исследований -->
+          <div class="form-group">
+            <label for="goal">Цель испытаний и исследований</label>
+            <textarea class="form-control" name="goal" id="goal" rows="3" required></textarea>
+          </div>
+
+          <!-- Статус -->
+          <div class="form-group">
+            <label for="status">Статус</label>
+            <select class="form-control" name="status" id="status" required>
+              <option value="Новый">Новый</option>
+              <option value="В процессе">В процессе</option>
+              <option value="Завершён">Завершён</option>
+            </select>
+          </div>
+
+          <!-- Отчёт -->
+          <div class="form-group">
+            <label for="report">Отчёт</label>
+            <textarea class="form-control" name="report" id="report" rows="3"></textarea>
+          </div>
+
+          <!-- Кнопка подтверждения -->
+          <button type="submit" class="btn btn-success">Подтвердить оформление</button>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Уведомление об успешном оформлении -->
+<div id="successMessage" class="alert alert-success" style="display:none;">
+    Заявка успешно оформлена!
+</div>
 ```
 
-Убедитесь, что кнопка создается правильно и передает ID шаблона (в данном случае `$row['id']`).
+### Обновление JavaScript для отправки формы через AJAX
 
-### 2. Скрипт для открытия модального окна
-
-Вот исправленный JavaScript-код, который должен срабатывать только при нажатии кнопки "Оформить":
+Теперь при отправке формы через AJAX необходимо передать все новые поля на сервер:
 
 ```html
 <script>
@@ -27,20 +95,99 @@ function openSubmitModal(templateId) {
     // Устанавливаем значение ID шаблона в скрытое поле формы
     document.getElementById('templateId').value = templateId;
     
-    // Открываем модальное окно только по нажатию кнопки
+    // Открываем модальное окно
     $('#submitModal').modal('show');
 }
 
-// Убедитесь, что функция не вызывается сразу, а только при нажатии кнопки
+// Обработчик формы для отправки через AJAX
+document.getElementById('submitForm').addEventListener('submit', function(e) {
+    e.preventDefault(); // Отключаем стандартную отправку формы
+
+    // Получаем данные формы
+    var formData = new FormData(this);
+
+    // Отправляем данные через AJAX
+    fetch('submit_template.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json()) // Предполагается, что сервер возвращает JSON
+    .then(data => {
+        if (data.success) {
+            // Закрываем модальное окно
+            $('#submitModal').modal('hide');
+
+            // Показываем сообщение об успехе
+            document.getElementById('successMessage').style.display = 'block';
+
+            // Скрываем сообщение через несколько секунд
+            setTimeout(() => {
+                document.getElementById('successMessage').style.display = 'none';
+            }, 3000);
+        } else {
+            alert('Ошибка: ' + data.error); // Выводим ошибку, если что-то пошло не так
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка при отправке запроса:', error);
+    });
+});
 </script>
 ```
 
-### Что проверить:
+### Обновление обработки на стороне сервера в `submit_template.php`
 
-1. **Обработчик события**: Функция `openSubmitModal()` должна быть вызвана только при нажатии на кнопку "Оформить". Проверьте, нет ли у вас ошибок, которые вызывают её сразу при загрузке страницы.
-   
-2. **Очистка кеша**: Иногда браузер может кэшировать старую версию скрипта. Попробуйте очистить кэш браузера или открыть страницу в режиме инкогнито.
+Теперь сервер должен обрабатывать и сохранять все новые поля в базе данных:
 
-3. **HTML-события**: Убедитесь, что никаких других JavaScript-событий, таких как автоматический вызов функции, не привязывается к кнопке "Оформить".
+```php
+<?php
+// Проверка данных
+if (isset($_POST['template_id']) && isset($_POST['research_object']) && isset($_POST['initiator']) && isset($_POST['reason']) && isset($_POST['goal']) && isset($_POST['status'])) {
+    $template_id = $_POST['template_id'];
+    $research_object = $_POST['research_object'];
+    $initiator = $_POST['initiator'];
+    $created_at = $_POST['created_at'];
+    $reason = $_POST['reason'];
+    $goal = $_POST['goal'];
+    $status = $_POST['status'];
+    $report = isset($_POST['report']) ? $_POST['report'] : ''; // Отчёт может быть пустым
 
-После этого, модальное окно должно открываться только при нажатии на соответствующую кнопку.
+    // Логика для сохранения данных в базе данных
+    // Например, обновление статуса заявки в таблице
+
+    $pdo = new PDO('mysql:host=localhost;dbname=your_database', 'username', 'password');
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    $stmt = $pdo->prepare("INSERT INTO user_templates (template_id, research_object, initiator, created_at, reason, goal, status, report) VALUES (:template_id, :research_object, :initiator, :created_at, :reason, :goal, :status, :report)");
+    
+    $stmt->execute([
+        ':template_id' => $template_id,
+        ':research_object' => $research_object,
+        ':initiator' => $initiator,
+        ':created_at' => $created_at,
+        ':reason' => $reason,
+        ':goal' => $goal,
+        ':status' => $status,
+        ':report' => $report
+    ]);
+
+    // Сообщаем об успешной операции
+    $response = ['success' => true];
+} else {
+    // Сообщаем об ошибке
+    $response = ['success' => false, 'error' => 'Неверные данные'];
+}
+
+// Отправляем ответ в формате JSON
+header('Content-Type: application/json');
+echo json_encode($response);
+```
+
+### Как это работает:
+
+1. **Модальное окно**: При нажатии на кнопку "Оформить", модальное окно открывается, и пользователю предлагается заполнить дополнительные поля.
+2. **AJAX отправка**: После заполнения формы данные отправляются на сервер через AJAX без перезагрузки страницы.
+3. **Серверная обработка**: На сервере данные сохраняются в базе данных (например, в таблице `user_templates`).
+4. **Ответ JSON**: Сервер отвечает JSON-ответом. Если операция успешна, выводится уведомление о том, что заявка оформлена.
+
+Теперь все поля из модального окна будут передаваться на сервер без перезагрузки страницы, и данные будут сохраняться в базе данных.
