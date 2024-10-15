@@ -260,3 +260,69 @@ function openSubmitModal(templateId) {
 3. Проверьте кэш браузера, если старые данные всё ещё отображаются неправильно.
 
 Теперь модальное окно должно открываться корректно только при нажатии кнопки "Оформить".
+
+
+Ошибка `Uncaught TypeError: $().modal is not a function` обычно указывает на то, что jQuery не загружен или загружен некорректно, либо отсутствует подключение к Bootstrap JavaScript-файлам, которые предоставляют функциональность для модальных окон.
+
+### Шаги для решения:
+
+1. **Убедитесь, что jQuery подключен корректно:**
+
+   Для работы модальных окон Bootstrap требуется подключение jQuery. Проверьте, что у вас есть корректное подключение jQuery перед подключением скриптов Bootstrap.
+
+   Пример правильного подключения:
+
+   ```html
+   <!-- jQuery -->
+   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+   <!-- Bootstrap CSS -->
+   <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+
+   <!-- Bootstrap JS (зависит от jQuery) -->
+   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+   ```
+
+2. **Загрузите jQuery до Bootstrap:**
+
+   Важно, чтобы jQuery загружался **до** подключения Bootstrap JS, так как Bootstrap использует функции jQuery. Если порядок неверный, это вызовет ошибку.
+
+3. **Проверьте подключение версий:**
+
+   Bootstrap 4 использует jQuery, но если вы используете Bootstrap 5, он больше не зависит от jQuery, и нужно подключать Bootstrap JavaScript-файлы отдельно. Вот пример для Bootstrap 5:
+
+   ```html
+   <!-- Bootstrap 5 CSS -->
+   <link href="https://stackpath.bootstrapcdn.com/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+
+   <!-- Bootstrap 5 JS (без jQuery) -->
+   <script src="https://stackpath.bootstrapcdn.com/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+   ```
+
+4. **Проверка кода модального окна:**
+
+   Убедитесь, что вызываете модальное окно корректно, используя правильный код для работы с Bootstrap:
+
+   ```html
+   <script>
+   function openSubmitModal(templateId) {
+       // Устанавливаем значение ID шаблона в скрытое поле формы
+       document.getElementById('templateId').value = templateId;
+       
+       // Открываем модальное окно
+       $('#submitModal').modal('show');  // Для Bootstrap 4
+       // Для Bootstrap 5 (если без jQuery, то это вызов):
+       // var modal = new bootstrap.Modal(document.getElementById('submitModal'));
+       // modal.show();
+   }
+   </script>
+   ```
+
+   В Bootstrap 5 больше не используется jQuery для модальных окон, поэтому для Bootstrap 5 необходимо использовать JavaScript API напрямую.
+
+### Заключение:
+
+- Для **Bootstrap 4**: Проверьте, что jQuery подключен правильно, перед Bootstrap скриптами.
+- Для **Bootstrap 5**: Используйте JavaScript API напрямую, без jQuery.
+
+Попробуйте один из этих подходов в зависимости от версии Bootstrap, которую вы используете.
