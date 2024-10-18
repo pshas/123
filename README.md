@@ -1,14 +1,14 @@
-Чтобы подставить значения в поля модального окна в зависимости от переданного ID (например, данных, которые хранятся в базе данных), вам нужно выполнить следующие шаги:
+Для изменения поля `status` и поля `is_activate` при нажатии кнопки "Подтвердить оформление" в модальном окне, вам нужно реализовать следующую логику:
 
-1. **Передача ID шаблона в функцию для открытия модального окна.**
-2. **Выполнение AJAX-запроса к серверу для получения данных.**
-3. **Заполнение полей модального окна полученными данными.**
+1. **Добавить кнопку "Подтвердить оформление" в модальное окно.**
+2. **Обновить статус и активность шаблона через AJAX-запрос к серверу.**
+3. **После успешного обновления — закрыть модальное окно.**
 
 ### Шаги по реализации:
 
-1. **HTML для модального окна:**
-
-   Вот обновленная разметка для модального окна, где у вас будут поля для редактирования:
+1. **Изменение HTML модального окна:**
+   
+   Добавьте кнопку "Подтвердить оформление" рядом с кнопкой "Сохранить изменения":
 
    ```html
    <!-- Модальное окно -->
@@ -26,29 +26,13 @@
            <form id="submitForm">
              <input type="hidden" name="template_id" id="templateId" value="">
 
-             <!-- Объект исследования -->
+             <!-- Поля формы (пример) -->
              <div class="form-group">
                <label for="research_object">Объект исследования</label>
                <input type="text" class="form-control" name="research_object" id="research_object" required>
              </div>
 
-             <!-- Инициатор -->
-             <div class="form-group">
-               <label for="initiator">Инициатор</label>
-               <input type="text" class="form-control" name="initiator" id="initiator" required>
-             </div>
-
-             <!-- Причина обращения -->
-             <div class="form-group">
-               <label for="reason">Причина обращения</label>
-               <input type="text" class="form-control" name="reason" id="reason" required>
-             </div>
-
-             <!-- Цель испытаний и исследований -->
-             <div class="form-group">
-               <label for="goal">Цель испытаний и исследований</label>
-               <textarea class="form-control" name="goal" id="goal" rows="3" required></textarea>
-             </div>
+             <!-- Другие поля... -->
 
              <!-- Статус -->
              <div class="form-group">
@@ -66,7 +50,13 @@
                <textarea class="form-control" name="report" id="report" rows="3"></textarea>
              </div>
 
-             <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+             <div class="modal-footer">
+               <!-- Кнопка "Сохранить изменения" -->
+               <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+               
+               <!-- Кнопка "Подтвердить оформление" -->
+               <button type="button" class="btn btn-success" onclick="confirmSubmission()">Подтвердить оформление</button>
+             </div>
            </form>
          </div>
        </div>
@@ -74,46 +64,51 @@
    </div>
    ```
 
-2. **JavaScript для открытия модального окна и заполнения его данными:**
+2. **JavaScript для обработки кнопки "Подтвердить оформление":**
 
-   Теперь нам нужно сделать AJAX-запрос к серверу для получения данных по указанному ID. Эти данные затем подставляются в поля формы.
+   Теперь мы реализуем функцию `confirmSubmission()`, которая будет менять поле `status` и `is_activate` через AJAX-запрос.
 
    ```html
    <script>
-   // Функция для открытия модального окна и подставления данных
-   function openSubmitModal(templateId) {
-       // Устанавливаем значение ID в скрытое поле формы
-       document.getElementById('templateId').value = templateId;
+   // Функция для подтверждения оформления
+   function confirmSubmission() {
+       // Получаем ID шаблона из скрытого поля
+       const templateId = document.getElementById('templateId').value;
 
-       // Выполняем AJAX-запрос для получения данных о заявке
-       fetch('get_template_data.php?id=' + templateId)
-       .then(response => response.json()) // Ожидаем, что сервер вернет JSON
+       // Отправляем AJAX-запрос на сервер для обновления статуса и активации
+       fetch('confirm_submission.php', {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/json',
+           },
+           body: JSON.stringify({
+               id: templateId,
+               status: 'Завершён',  // Меняем статус на "Завершён"
+               is_activate: 0       // Меняем активность на "Деактивировано"
+           }),
+       })
+       .then(response => response.json())
        .then(data => {
            if (data.success) {
-               // Заполняем поля модального окна полученными данными
-               document.getElementById('research_object').value = data.research_object;
-               document.getElementById('initiator').value = data.initiator;
-               document.getElementById('reason').value = data.reason;
-               document.getElementById('goal').value = data.goal;
-               document.getElementById('status').value = data.status;
-               document.getElementById('report').value = data.report;
+               // Если успешно, закрываем модальное окно
+               $('#submitModal').modal('hide');
 
-               // Открываем модальное окно
-               $('#submitModal').modal('show');
+               // Обновляем интерфейс, если нужно
+               alert('Заявка успешно оформлена!');
            } else {
-               alert('Не удалось загрузить данные шаблона.');
+               alert('Ошибка при оформлении заявки.');
            }
        })
        .catch(error => {
-           console.error('Ошибка при загрузке данных шаблона:', error);
+           console.error('Ошибка при оформлении:', error);
        });
    }
    </script>
    ```
 
-3. **PHP-файл для получения данных `get_template_data.php`:**
+3. **PHP-скрипт `confirm_submission.php` для обновления полей:**
 
-   Этот скрипт на сервере будет возвращать данные по шаблону с указанным ID. Он будет запрашивать данные из базы данных и возвращать их в формате JSON.
+   На стороне сервера создайте файл `confirm_submission.php`, который будет обрабатывать запрос на изменение полей `status` и `is_activate`.
 
    ```php
    <?php
@@ -121,28 +116,27 @@
    $pdo = new PDO('mysql:host=localhost;dbname=your_database', 'username', 'password');
    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-   if (isset($_GET['id'])) {
-       $template_id = $_GET['id'];
+   // Получаем данные из POST-запроса
+   $data = json_decode(file_get_contents('php://input'), true);
 
-       // Запрос для получения данных о шаблоне
-       $stmt = $pdo->prepare("SELECT * FROM user_templates WHERE id = :id");
-       $stmt->execute([':id' => $template_id]);
+   if (isset($data['id'])) {
+       $template_id = $data['id'];
+       $status = $data['status'];
+       $is_activate = $data['is_activate'];
 
-       $template = $stmt->fetch(PDO::FETCH_ASSOC);
+       // Запрос для обновления статуса и активации шаблона
+       $stmt = $pdo->prepare("UPDATE user_templates SET status = :status, is_activate = :is_activate WHERE id = :id");
+       $result = $stmt->execute([
+           ':status' => $status,
+           ':is_activate' => $is_activate,
+           ':id' => $template_id
+       ]);
 
-       if ($template) {
-           // Возвращаем данные в формате JSON
-           echo json_encode([
-               'success' => true,
-               'research_object' => $template['research_object'],
-               'initiator' => $template['initiator'],
-               'reason' => $template['reason'],
-               'goal' => $template['goal'],
-               'status' => $template['status'],
-               'report' => $template['report']
-           ]);
+       if ($result) {
+           // Возвращаем успешный ответ
+           echo json_encode(['success' => true]);
        } else {
-           echo json_encode(['success' => false, 'error' => 'Шаблон не найден.']);
+           echo json_encode(['success' => false, 'error' => 'Не удалось обновить шаблон.']);
        }
    } else {
        echo json_encode(['success' => false, 'error' => 'ID не передан.']);
@@ -150,21 +144,15 @@
    ?>
    ```
 
-4. **Кнопка для открытия модального окна:**
-
-   Убедитесь, что кнопка для открытия модального окна передает корректный `template_id`:
-
-   ```php
-   echo "<td>
-           <button class='btn btn-success btn-sm' onclick='openSubmitModal(" . $row['id'] . ")'>Оформить</button>
-         </td>";
-   ```
-
 ### Как это работает:
 
-1. Когда пользователь нажимает на кнопку "Оформить", вызывается функция `openSubmitModal(templateId)`, в которой передается ID соответствующего шаблона.
-2. Через AJAX-запрос данные этого шаблона подгружаются с сервера (из файла `get_template_data.php`), и поля модального окна заполняются этими данными.
-3. После этого модальное окно открывается, и пользователь может редактировать данные.
-4. При сохранении изменений данные отправляются на сервер для обработки, и шаблон обновляется.
+1. Пользователь нажимает на кнопку "Подтвердить оформление".
+2. Вызов функции `confirmSubmission()` отправляет AJAX-запрос на сервер с ID шаблона и новыми значениями для полей `status` и `is_activate`.
+3. PHP-скрипт на сервере (`confirm_submission.php`) обновляет соответствующую запись в базе данных.
+4. После успешного обновления, модальное окно закрывается, и можно показать сообщение о успешном оформлении.
 
-Теперь модальное окно будет открываться с подставленными данными, соответствующими выбранному шаблону.
+### Поля:
+- `status`: Меняется на "Завершён" при оформлении.
+- `is_activate`: Меняется на `0` (деактивировано) при оформлении.
+
+Этот процесс происходит без перезагрузки страницы и обновляет только нужные данные в базе.
