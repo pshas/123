@@ -1,158 +1,183 @@
-Для изменения поля `status` и поля `is_activate` при нажатии кнопки "Подтвердить оформление" в модальном окне, вам нужно реализовать следующую логику:
+Для того чтобы реализовать список пользователей и групп с интерактивным выбором, мы можем использовать стандартные компоненты Bitrix24, такие как BX.UI.Selector (селектор пользователей) и выбор групп через AJAX. Это улучшит UX, так как администраторы смогут легко выбирать пользователей и группы из выпадающих списков.
 
-1. **Добавить кнопку "Подтвердить оформление" в модальное окно.**
-2. **Обновить статус и активность шаблона через AJAX-запрос к серверу.**
-3. **После успешного обновления — закрыть модальное окно.**
+### 1. **Интерактивный выбор пользователей и групп**
+Добавим динамические выпадающие списки для выбора пользователей и групп в модальном окне.
 
-### Шаги по реализации:
+#### Модальное окно с выбором пользователей и групп:
+```html
+<!-- Кнопка для открытия модального окна -->
+<button id="openModal">Добавить пользователя в группу</button>
 
-1. **Изменение HTML модального окна:**
-   
-   Добавьте кнопку "Подтвердить оформление" рядом с кнопкой "Сохранить изменения":
+<!-- Модальное окно -->
+<div id="myModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Добавить пользователя в группу</h2>
+        
+        <!-- Селект для пользователей -->
+        <label for="user_id">Пользователь:</label>
+        <select id="user_id" name="user_id" required></select>
+        
+        <!-- Селект для групп -->
+        <label for="group_id">Группа:</label>
+        <select id="group_id" name="group_id" required></select><br><br>
 
-   ```html
-   <!-- Модальное окно -->
-   <div class="modal fade" id="submitModal" tabindex="-1" role="dialog" aria-labelledby="submitModalLabel" aria-hidden="true">
-     <div class="modal-dialog" role="document">
-       <div class="modal-content">
-         <div class="modal-header">
-           <h5 class="modal-title" id="submitModalLabel">Редактировать заявку</h5>
-           <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-             <span aria-hidden="true">&times;</span>
-           </button>
-         </div>
-         <div class="modal-body">
-           <!-- Форма для редактирования -->
-           <form id="submitForm">
-             <input type="hidden" name="template_id" id="templateId" value="">
+        <button type="submit" id="submitForm">Добавить</button>
+    </div>
+</div>
 
-             <!-- Поля формы (пример) -->
-             <div class="form-group">
-               <label for="research_object">Объект исследования</label>
-               <input type="text" class="form-control" name="research_object" id="research_object" required>
-             </div>
+<script>
+document.getElementById('openModal').onclick = function() {
+    document.getElementById('myModal').style.display = "block";
+    loadUsers();  // Загрузка списка пользователей
+    loadGroups(); // Загрузка списка групп
+};
 
-             <!-- Другие поля... -->
+document.querySelector('.close').onclick = function() {
+    document.getElementById('myModal').style.display = "none";
+};
 
-             <!-- Статус -->
-             <div class="form-group">
-               <label for="status">Статус</label>
-               <select class="form-control" name="status" id="status" required>
-                 <option value="Новый">Новый</option>
-                 <option value="В процессе">В процессе</option>
-                 <option value="Завершён">Завершён</option>
-               </select>
-             </div>
+// Закрытие окна, если клик вне его
+window.onclick = function(event) {
+    if (event.target == document.getElementById('myModal')) {
+        document.getElementById('myModal').style.display = "none";
+    }
+};
 
-             <!-- Отчёт -->
-             <div class="form-group">
-               <label for="report">Отчёт</label>
-               <textarea class="form-control" name="report" id="report" rows="3"></textarea>
-             </div>
+// Функция для загрузки списка пользователей через AJAX
+function loadUsers() {
+    BX.ajax({
+        url: '/local/ajax/get_users.php',
+        method: 'POST',
+        dataType: 'json',
+        onsuccess: function(data) {
+            let userSelect = document.getElementById('user_id');
+            userSelect.innerHTML = ''; // Очищаем предыдущие данные
+            data.users.forEach(function(user) {
+                let option = document.createElement('option');
+                option.value = user.ID;
+                option.text = user.NAME;
+                userSelect.add(option);
+            });
+        }
+    });
+}
 
-             <div class="modal-footer">
-               <!-- Кнопка "Сохранить изменения" -->
-               <button type="submit" class="btn btn-primary">Сохранить изменения</button>
-               
-               <!-- Кнопка "Подтвердить оформление" -->
-               <button type="button" class="btn btn-success" onclick="confirmSubmission()">Подтвердить оформление</button>
-             </div>
-           </form>
-         </div>
-       </div>
-     </div>
-   </div>
-   ```
+// Функция для загрузки списка групп через AJAX
+function loadGroups() {
+    BX.ajax({
+        url: '/local/ajax/get_groups.php',
+        method: 'POST',
+        dataType: 'json',
+        onsuccess: function(data) {
+            let groupSelect = document.getElementById('group_id');
+            groupSelect.innerHTML = ''; // Очищаем предыдущие данные
+            data.groups.forEach(function(group) {
+                let option = document.createElement('option');
+                option.value = group.ID;
+                option.text = group.NAME;
+                groupSelect.add(option);
+            });
+        }
+    });
+}
 
-2. **JavaScript для обработки кнопки "Подтвердить оформление":**
+// Обработка отправки формы
+document.getElementById('submitForm').onclick = function(e) {
+    e.preventDefault();
+    
+    const user_id = document.getElementById('user_id').value;
+    const group_id = document.getElementById('group_id').value;
+    
+    // Вызов AJAX-запроса для добавления пользователя в группу
+    BX.ajax({
+        url: '/local/ajax/add_user_to_group.php',
+        method: 'POST',
+        data: {
+            user_id: user_id,
+            group_id: group_id
+        },
+        dataType: 'json',
+        onsuccess: function(data) {
+            if(data.success) {
+                alert('Пользователь успешно добавлен в группу');
+                document.getElementById('myModal').style.display = "none";
+            } else {
+                alert('Ошибка добавления пользователя: ' + data.message);
+            }
+        }
+    });
+};
+</script>
+```
 
-   Теперь мы реализуем функцию `confirmSubmission()`, которая будет менять поле `status` и `is_activate` через AJAX-запрос.
+### 2. **Создание обработчиков для получения списка пользователей и групп**
 
-   ```html
-   <script>
-   // Функция для подтверждения оформления
-   function confirmSubmission() {
-       // Получаем ID шаблона из скрытого поля
-       const templateId = document.getElementById('templateId').value;
+#### 2.1. Обработчик для получения списка пользователей (`/local/ajax/get_users.php`):
+Используем API Bitrix для получения списка всех пользователей.
 
-       // Отправляем AJAX-запрос на сервер для обновления статуса и активации
-       fetch('confirm_submission.php', {
-           method: 'POST',
-           headers: {
-               'Content-Type': 'application/json',
-           },
-           body: JSON.stringify({
-               id: templateId,
-               status: 'Завершён',  // Меняем статус на "Завершён"
-               is_activate: 0       // Меняем активность на "Деактивировано"
-           }),
-       })
-       .then(response => response.json())
-       .then(data => {
-           if (data.success) {
-               // Если успешно, закрываем модальное окно
-               $('#submitModal').modal('hide');
+```php
+<?php
+require($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/prolog_before.php");
 
-               // Обновляем интерфейс, если нужно
-               alert('Заявка успешно оформлена!');
-           } else {
-               alert('Ошибка при оформлении заявки.');
-           }
-       })
-       .catch(error => {
-           console.error('Ошибка при оформлении:', error);
-       });
-   }
-   </script>
-   ```
+if (!CModule::IncludeModule("main")) {
+    echo json_encode(['success' => false, 'message' => 'Ошибка подключения модуля']);
+    die();
+}
 
-3. **PHP-скрипт `confirm_submission.php` для обновления полей:**
+$users = [];
+$rsUsers = CUser::GetList(($by = "id"), ($order = "asc"), ['ACTIVE' => 'Y']);
+while ($user = $rsUsers->Fetch()) {
+    $users[] = [
+        'ID' => $user['ID'],
+        'NAME' => $user['NAME'] . ' ' . $user['LAST_NAME']
+    ];
+}
 
-   На стороне сервера создайте файл `confirm_submission.php`, который будет обрабатывать запрос на изменение полей `status` и `is_activate`.
+echo json_encode(['success' => true, 'users' => $users]);
+?>
+```
 
-   ```php
-   <?php
-   // Подключение к базе данных
-   $pdo = new PDO('mysql:host=localhost;dbname=your_database', 'username', 'password');
-   $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+#### 2.2. Обработчик для получения списка групп (`/local/ajax/get_groups.php`):
+Используем API для получения списка всех групп.
 
-   // Получаем данные из POST-запроса
-   $data = json_decode(file_get_contents('php://input'), true);
+```php
+<?php
+require($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/prolog_before.php");
 
-   if (isset($data['id'])) {
-       $template_id = $data['id'];
-       $status = $data['status'];
-       $is_activate = $data['is_activate'];
+if (!CModule::IncludeModule("socialnetwork")) {
+    echo json_encode(['success' => false, 'message' => 'Ошибка подключения модуля']);
+    die();
+}
 
-       // Запрос для обновления статуса и активации шаблона
-       $stmt = $pdo->prepare("UPDATE user_templates SET status = :status, is_activate = :is_activate WHERE id = :id");
-       $result = $stmt->execute([
-           ':status' => $status,
-           ':is_activate' => $is_activate,
-           ':id' => $template_id
-       ]);
+$groups = [];
+$rsGroups = CSocNetGroup::GetList(
+    ['NAME' => 'ASC'],
+    ['ACTIVE' => 'Y'],
+    false,
+    false,
+    ['ID', 'NAME']
+);
+while ($group = $rsGroups->Fetch()) {
+    $groups[] = [
+        'ID' => $group['ID'],
+        'NAME' => $group['NAME']
+    ];
+}
 
-       if ($result) {
-           // Возвращаем успешный ответ
-           echo json_encode(['success' => true]);
-       } else {
-           echo json_encode(['success' => false, 'error' => 'Не удалось обновить шаблон.']);
-       }
-   } else {
-       echo json_encode(['success' => false, 'error' => 'ID не передан.']);
-   }
-   ?>
-   ```
+echo json_encode(['success' => true, 'groups' => $groups]);
+?>
+```
 
-### Как это работает:
+### 3. **Добавление пользователя в группу**
+Файл `/local/ajax/add_user_to_group.php` уже был приведен в предыдущем шаге. Необходимо только убедиться, что обработчики возвращают корректные данные, и все AJAX-запросы работают правильно.
 
-1. Пользователь нажимает на кнопку "Подтвердить оформление".
-2. Вызов функции `confirmSubmission()` отправляет AJAX-запрос на сервер с ID шаблона и новыми значениями для полей `status` и `is_activate`.
-3. PHP-скрипт на сервере (`confirm_submission.php`) обновляет соответствующую запись в базе данных.
-4. После успешного обновления, модальное окно закрывается, и можно показать сообщение о успешном оформлении.
+### 4. **Включение AJAX и стилей в шаблон**
+Не забудьте включить поддержку AJAX и стили для модального окна в шаблон:
 
-### Поля:
-- `status`: Меняется на "Завершён" при оформлении.
-- `is_activate`: Меняется на `0` (деактивировано) при оформлении.
+```php
+CJSCore::Init(array('ajax'));
+```
 
-Этот процесс происходит без перезагрузки страницы и обновляет только нужные данные в базе.
+### Результат
+Теперь при нажатии на кнопку откроется модальное окно, в котором можно будет выбрать пользователя и группу из интерактивных выпадающих списков. Это значительно улучшит удобство использования, так как пользователи смогут быстро находить нужные группы и пользователей без ввода ID вручную.
