@@ -346,3 +346,167 @@ echo json_encode(['success' => true, 'message' => 'Пользователь ус
 5. **Грамотно обрабатывайте данные и ошибки как на стороне клиента (JavaScript), так и на стороне сервера (PHP).**
 
 Эти шаги помогут вам настроить корректную работу AJAX-запросов в Bitrix.
+
+
+Чтобы реализовать функциональность, позволяющую вводить пользователей вручную с автоматическим отображением подходящих вариантов из списка, можно использовать **поле с автодополнением**. В Bitrix такая функциональность может быть реализована с помощью компонента **`BX.ui`** или через популярные библиотеки автокомплита (например, jQuery UI Autocomplete или Select2).
+
+Я покажу пример, как это можно сделать, используя стандартные возможности **Bitrix** и его **AJAX**. Ниже приведен пример с автокомплитом для поля выбора пользователей.
+
+### Шаги для реализации автокомплита:
+
+1. **Обновим HTML для поля выбора пользователей:**
+
+Мы будем использовать обычное текстовое поле для ввода имени пользователя с автоподстановкой.
+
+```html
+<!-- Поле ввода с автокомплитом -->
+<label for="user_search">Пользователь:</label>
+<input type="text" id="user_search" name="user_search" autocomplete="off" placeholder="Введите имя пользователя...">
+<ul id="user_suggestions" style="display:none;"></ul> <!-- Список автоподсказок -->
+```
+
+2. **JS код для автоподстановки с использованием AJAX**:
+
+Нам нужно написать код, который будет отправлять запрос на сервер для поиска пользователей при вводе текста в поле. В ответе сервер должен возвращать список пользователей, которые соответствуют введенному значению.
+
+```javascript
+BX.ready(function() {
+    // Отслеживание ввода текста в поле
+    document.getElementById('user_search').oninput = function() {
+        const query = this.value.trim();
+
+        if (query.length < 2) { // Не отправляем запрос, если длина строки меньше 2 символов
+            document.getElementById('user_suggestions').style.display = 'none';
+            return;
+        }
+
+        // AJAX-запрос для получения списка пользователей
+        BX.ajax({
+            url: '/local/ajax/search_users.php', // Ваш обработчик, который ищет пользователей
+            method: 'POST',
+            dataType: 'json',
+            data: {
+                query: query,
+                sessid: BX.bitrix_sessid() // Обязательно передаем сессионный идентификатор
+            },
+            onsuccess: function(data) {
+                let suggestions = document.getElementById('user_suggestions');
+                suggestions.innerHTML = ''; // Очищаем предыдущие подсказки
+
+                if (data.length > 0) {
+                    data.forEach(function(user) {
+                        let li = document.createElement('li');
+                        li.textContent = user.NAME + ' (' + user.EMAIL + ')'; // Отображаем имя и почту пользователя
+                        li.dataset.userId = user.ID;
+
+                        // При выборе пользователя
+                        li.onclick = function() {
+                            document.getElementById('user_search').value = user.NAME;
+                            suggestions.style.display = 'none'; // Скрываем подсказки
+                        };
+
+                        suggestions.appendChild(li);
+                    });
+
+                    suggestions.style.display = 'block'; // Отображаем список подсказок
+                } else {
+                    suggestions.style.display = 'none'; // Скрываем, если данных нет
+                }
+            },
+            onfailure: function(error) {
+                console.error('Ошибка при получении данных', error);
+            }
+        });
+    };
+});
+```
+
+3. **CSS для стилизации списка подсказок**:
+
+Добавим простой стиль для выпадающего списка, чтобы он выглядел красиво и корректно отображался под полем ввода.
+
+```css
+#user_suggestions {
+    position: absolute;
+    background-color: white;
+    border: 1px solid #ccc;
+    max-height: 150px;
+    overflow-y: auto;
+    width: 300px;
+    list-style: none;
+    padding: 0;
+    margin-top: 0;
+    z-index: 1000;
+}
+
+#user_suggestions li {
+    padding: 8px;
+    cursor: pointer;
+}
+
+#user_suggestions li:hover {
+    background-color: #f0f0f0;
+}
+```
+
+4. **PHP обработчик (`search_users.php`)**:
+
+Создадим обработчик, который будет принимать запрос на поиск пользователей и возвращать результаты в формате JSON.
+
+```php
+<?php
+require($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/prolog_before.php");
+
+// Проверка сессии
+if (!check_bitrix_sessid()) {
+    echo json_encode([]);
+    die();
+}
+
+if (!$USER->IsAuthorized()) {
+    echo json_encode([]);
+    die();
+}
+
+$query = htmlspecialcharsbx($_POST['query']);
+
+// Подключение нужных модулей
+if (!CModule::IncludeModule('main')) {
+    echo json_encode([]);
+    die();
+}
+
+// Поиск пользователей по введенному запросу
+$arFilter = [
+    'ACTIVE' => 'Y',
+    '?NAME' => $query, // Ищем по имени
+    'LOGIC' => 'OR',
+    '?LAST_NAME' => $query, // Ищем по фамилии
+    '?EMAIL' => $query // Ищем по email
+];
+$rsUsers = CUser::GetList(($by = "NAME"), ($order = "ASC"), $arFilter, ['FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'EMAIL']]);
+
+$users = [];
+while ($arUser = $rsUsers->Fetch()) {
+    $users[] = [
+        'ID' => $arUser['ID'],
+        'NAME' => $arUser['NAME'] . ' ' . $arUser['LAST_NAME'],
+        'EMAIL' => $arUser['EMAIL']
+    ];
+}
+
+echo json_encode($users);
+?>
+```
+
+### Пример работы:
+
+1. Пользователь начинает вводить имя пользователя в текстовое поле.
+2. Происходит AJAX-запрос на сервер (в обработчик `search_users.php`), который ищет пользователей по введенному запросу.
+3. Сервер возвращает список подходящих пользователей.
+4. В выпадающем списке отображаются результаты поиска.
+5. Пользователь может кликнуть на нужного пользователя, и его данные будут вставлены в поле ввода.
+
+### Заключение:
+
+Этот код позволяет пользователю вводить текст и автоматически подсказывать возможные варианты пользователей на основе запроса. Такой механизм можно легко расширить, например, добавить сортировку по релевантности, расширить критерии поиска (по телефону, должности и т.д.) или стилизовать список вариантов для лучшего восприятия.
