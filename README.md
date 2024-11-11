@@ -1,80 +1,177 @@
-Если подсказки работают, но выводятся все пользователи, а не только те, которые соответствуют введенному запросу, скорее всего, проблема в логике фильтрации пользователей в PHP-скрипте `search_users.php`. Давайте убедимся, что запрос пользователей учитывает частичное совпадение с введенным текстом.
+Если запрос к `search_users.php` пустой, это означает, что значение параметра `query` из JavaScript не передается на сервер. Давайте еще раз проверим, правильно ли передается параметр, и исправим возможные ошибки.
 
-### Обновленный `search_users.php` для фильтрации пользователей по введенному тексту
+### Проверка и исправление передачи параметра в JavaScript
 
-1. Убедимся, что параметр поиска передается в запросе, и используем его для фильтрации.
-2. В фильтре используем `'%NAME' => $query`, чтобы найти пользователей по частичному совпадению с именем.
+1. **Убедитесь, что значение `query` передается в запросе AJAX**:
+   В коде JavaScript проверьте, что переменная `query` действительно содержит текст из поля ввода и передается в запрос `BX.ajax`. 
 
-Вот исправленный код для `search_users.php`, чтобы возвращались только те пользователи, которые соответствуют введенному запросу:
+2. **Измените обработчик `oninput` для тестирования параметра `query`**:
+   Временно добавьте вывод переменной `query` в консоль сразу после её объявления:
 
-```php
-<?php
-require($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/prolog_before.php");
+   ```javascript
+   document.getElementById('user_search').oninput = function() {
+       const query = this.value.trim();
+       console.log("Запрос:", query); // Выводим значение query в консоль для проверки
 
-// Проверка сессии
-if (!check_bitrix_sessid()) {
-    echo json_encode([]);
-    die();
-}
+       if (query.length < 2) {
+           document.getElementById('user_suggestions').style.display = 'none';
+           return;
+       }
 
-// Проверка авторизации пользователя
-if (!$USER->IsAuthorized()) {
-    echo json_encode([]);
-    die();
-}
+       // Отправляем AJAX-запрос
+       BX.ajax({
+           url: '/local/ajax/search_users.php',
+           method: 'POST',
+           dataType: 'json',
+           data: {
+               query: query,
+               sessid: BX.bitrix_sessid()
+           },
+           onsuccess: function(data) {
+               console.log("Ответ от сервера:", data); // Выводим ответ для отладки
+               let suggestions = document.getElementById('user_suggestions');
+               suggestions.innerHTML = '';
 
-// Подключаем модуль, если он не подключен
-if (!CModule::IncludeModule('main')) {
-    echo json_encode([]);
-    die();
-}
+               if (data && data.length > 0) {
+                   data.forEach(function(user) {
+                       let li = document.createElement('li');
+                       li.textContent = user.NAME + ' (' + user.EMAIL + ')';
+                       li.dataset.userId = user.ID;
 
-// Получаем параметр поиска и защищаем от инъекций
-$query = htmlspecialcharsbx(trim($_POST['query']));
+                       li.onclick = function() {
+                           document.getElementById('user_search').value = user.NAME;
+                           suggestions.style.display = 'none';
+                       };
 
-// Если запрос пустой или слишком короткий, возвращаем пустой массив
-if (strlen($query) < 2) {
-    echo json_encode([]);
-    die();
-}
+                       suggestions.appendChild(li);
+                   });
 
-// Настраиваем фильтр для поиска пользователей
-$arFilter = [
-    'ACTIVE' => 'Y',
-    '%NAME' => $query // Частичное совпадение с именем
-];
+                   suggestions.style.display = 'block';
+               } else {
+                   suggestions.style.display = 'none';
+               }
+           },
+           onfailure: function(error) {
+               console.error('Ошибка при запросе к серверу', error);
+           }
+       });
+   };
+   ```
 
-// Запрашиваем пользователей, соответствующих фильтру
-$rsUsers = CUser::GetList(
-    ($by = "NAME"), 
-    ($order = "ASC"), 
-    $arFilter, 
-    ['FIELDS' => ['ID', 'NAME', 'LAST_NAME', 'EMAIL']]
-);
+   - Откройте консоль браузера (обычно `F12`), чтобы убедиться, что значение `query` корректно выводится при вводе текста в поле.
+   - Проверьте, что консоль выводит это значение и что оно передается в запрос `BX.ajax`.
 
-// Формируем массив результатов
-$users = [];
-while ($arUser = $rsUsers->Fetch()) {
-    $users[] = [
-        'ID' => $arUser['ID'],
-        'NAME' => $arUser['NAME'] . ' ' . $arUser['LAST_NAME'], // Имя и фамилия
-        'EMAIL' => $arUser['EMAIL']
-    ];
-}
+3. **Проверьте код HTML, чтобы убедиться, что у поля ввода установлен правильный ID**:
+   
+   Код JavaScript ожидает, что поле поиска имеет `id="user_search"`. Проверьте ваш HTML, чтобы убедиться, что идентификатор совпадает:
 
-// Устанавливаем заголовок и возвращаем результат в формате JSON
-header('Content-Type: application/json');
-echo json_encode($users);
-?>
-```
+   ```html
+   <input type="text" id="user_search" placeholder="Введите имя пользователя">
+   ```
 
-### Объяснение кода
+4. **Проверка корректного использования `BX.ajax`**:
+   Иногда `BX.ajax` может не отправлять данные, если не подключен ядро Bitrix. Убедитесь, что вызов `BX.ready()` присутствует и что код оборачивает всё внутри этой функции:
 
-- **Фильтрация по частичному совпадению**: параметр `'%NAME' => $query` позволяет найти всех пользователей, в имени которых встречается подстрока, совпадающая с `$query`.
-- **Проверка длины `$query`**: добавлена проверка, чтобы запрос отправлялся только при длине строки 2 или более символов. Это поможет избежать излишней нагрузки на сервер.
-- **Защита от инъекций**: с помощью `htmlspecialcharsbx` фильтруем запрос для предотвращения возможных инъекций.
+   ```javascript
+   BX.ready(function() {
+       document.getElementById('user_search').oninput = function() {
+           const query = this.value.trim();
+           console.log("Запрос:", query);
 
-### Дальнейшие шаги
+           if (query.length < 2) {
+               document.getElementById('user_suggestions').style.display = 'none';
+               return;
+           }
 
-1. **Проверьте скрипт**: введите несколько букв, чтобы увидеть, как меняется список пользователей.
-2. **Отладка**: если все равно выводятся все пользователи, попробуйте вывести `$query` и `$arFilter` в консоль или лог, чтобы убедиться, что параметр фильтрации передается корректно.
+           BX.ajax({
+               url: '/local/ajax/search_users.php',
+               method: 'POST',
+               dataType: 'json',
+               data: {
+                   query: query,
+                   sessid: BX.bitrix_sessid()
+               },
+               onsuccess: function(data) {
+                   console.log("Ответ от сервера:", data);
+                   let suggestions = document.getElementById('user_suggestions');
+                   suggestions.innerHTML = '';
+
+                   if (data && data.length > 0) {
+                       data.forEach(function(user) {
+                           let li = document.createElement('li');
+                           li.textContent = user.NAME + ' (' + user.EMAIL + ')';
+                           li.dataset.userId = user.ID;
+
+                           li.onclick = function() {
+                               document.getElementById('user_search').value = user.NAME;
+                               suggestions.style.display = 'none';
+                           };
+
+                           suggestions.appendChild(li);
+                       });
+
+                       suggestions.style.display = 'block';
+                   } else {
+                       suggestions.style.display = 'none';
+                   }
+               },
+               onfailure: function(error) {
+                   console.error('Ошибка при запросе к серверу', error);
+               }
+           });
+       };
+   });
+   ```
+
+5. **Проверка работы через другие инструменты отладки**:
+   Если `BX.ajax` всё равно не передает данные, попробуйте временно заменить его на обычный `fetch` для отладки. Это поможет выявить, в чем проблема:
+
+   ```javascript
+   document.getElementById('user_search').oninput = function() {
+       const query = this.value.trim();
+       console.log("Запрос:", query);
+
+       if (query.length < 2) {
+           document.getElementById('user_suggestions').style.display = 'none';
+           return;
+       }
+
+       fetch('/local/ajax/search_users.php', {
+           method: 'POST',
+           headers: {
+               'Content-Type': 'application/x-www-form-urlencoded'
+           },
+           body: `query=${encodeURIComponent(query)}&sessid=${BX.bitrix_sessid()}`
+       })
+       .then(response => response.json())
+       .then(data => {
+           console.log("Ответ от сервера:", data);
+           let suggestions = document.getElementById('user_suggestions');
+           suggestions.innerHTML = '';
+
+           if (data && data.length > 0) {
+               data.forEach(function(user) {
+                   let li = document.createElement('li');
+                   li.textContent = user.NAME + ' (' + user.EMAIL + ')';
+                   li.dataset.userId = user.ID;
+
+                   li.onclick = function() {
+                       document.getElementById('user_search').value = user.NAME;
+                       suggestions.style.display = 'none';
+                   };
+
+                   suggestions.appendChild(li);
+               });
+
+               suggestions.style.display = 'block';
+           } else {
+               suggestions.style.display = 'none';
+           }
+       })
+       .catch(error => {
+           console.error('Ошибка при запросе к серверу', error);
+       });
+   };
+   ```
+
+Использование `fetch` временно поможет понять, если проблема была в `BX.ajax`.
