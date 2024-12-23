@@ -1,165 +1,152 @@
-Ошибка `"Unexpected end of JSON input"` возникает, если функция `response.json()` вызывается на ответе, который не содержит корректные данные в формате JSON. Это может происходить по разным причинам. Рассмотрим способы устранения проблемы.
+Да, конечно! Вы можете передавать данные с `input` с помощью метода `POST`. Для этого нужно внести небольшие изменения в код. Вот пример:
 
 ---
 
-### Причины ошибки
+### 1. **HTML с передачей данных через `POST`**
 
-1. **Пустой ответ от сервера**: 
-   Сервер может не возвращать никаких данных.
-   
-2. **Ответ не является JSON**: 
-   Сервер возвращает данные в другом формате (например, текст или HTML).
-   
-3. **Сервер возвращает ошибку (4xx или 5xx)**:
-   В таких случаях `response.json()` не сработает, так как тело ответа может быть пустым или невалидным.
-
----
-
-### Решения
-
-#### 1. **Проверка статуса ответа**
-Перед вызовом `response.json()`, проверьте статус ответа:
-
-```javascript
-fetch('suggestions.php?query=test')
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Подсказки с использованием POST</title>
+    <style>
+        .suggestions {
+            border: 1px solid #ccc;
+            max-width: 300px;
+            position: absolute;
+            background: white;
+            z-index: 10;
         }
-        return response.json();
-    })
-    .then(data => {
-        console.log('Data:', data);
-    })
-    .catch(error => {
-        console.error('Ошибка:', error);
-    });
+
+        .suggestions div {
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .suggestions div:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Подсказки для полей ввода</h1>
+    <input type="text" id="field1" placeholder="Введите что-то">
+    <div id="suggestions1" class="suggestions"></div>
+
+    <script>
+        // Функция для отправки данных через POST
+        function fetchSuggestions(query) {
+            if (query.length === 0) {
+                document.getElementById('suggestions1').innerHTML = '';
+                return;
+            }
+
+            fetch('suggestions.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `query=${encodeURIComponent(query)}` // Передача данных
+            })
+            .then(response => response.json())
+            .then(data => {
+                const suggestionsBox = document.getElementById('suggestions1');
+                suggestionsBox.innerHTML = '';
+
+                data.forEach(item => {
+                    const div = document.createElement('div');
+                    div.textContent = item;
+                    div.onclick = () => {
+                        document.getElementById('field1').value = item;
+                        suggestionsBox.innerHTML = '';
+                    };
+                    suggestionsBox.appendChild(div);
+                });
+            })
+            .catch(error => console.error('Ошибка:', error));
+        }
+
+        // Обработчик ввода
+        document.getElementById('field1').addEventListener('input', (e) => {
+            fetchSuggestions(e.target.value);
+        });
+    </script>
+</body>
+</html>
 ```
 
-Если сервер возвращает ошибочный статус (например, `404` или `500`), будет вызван блок `catch`.
-
 ---
 
-#### 2. **Проверка на пустой ответ**
-Если сервер может вернуть пустой ответ, обработайте это:
+### 2. **PHP-скрипт для обработки POST-запроса**
 
-```javascript
-fetch('suggestions.php?query=test')
-    .then(response => response.text()) // Читаем как текст
-    .then(text => {
-        if (text.trim() === '') {
-            throw new Error('Ответ сервера пуст');
-        }
-        return JSON.parse(text); // Преобразуем текст в JSON
-    })
-    .then(data => {
-        console.log('Data:', data);
-    })
-    .catch(error => {
-        console.error('Ошибка:', error);
-    });
-```
-
----
-
-#### 3. **Отладка на стороне сервера**
-Убедитесь, что сервер возвращает валидный JSON. В `PHP` это можно сделать так:
+Создайте файл `suggestions.php`:
 
 ```php
-header('Content-Type: application/json');
-echo json_encode($results);
-```
+<?php
+// Подключение к базе данных
+$host = 'localhost';
+$db = 'your_database';
+$user = 'your_username';
+$pass = 'your_password';
 
-Проверьте, не возникает ли ошибок до отправки данных, которые могут испортить JSON-ответ.
+try {
+    $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Ошибка подключения к базе данных: " . $e->getMessage());
+}
 
----
+// Проверяем, передан ли запрос методом POST
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Получаем данные из тела запроса
+    $input = $_POST['query'] ?? '';
 
-#### 4. **Проверка через отладчик (Network Tab)**
-Используйте инструменты разработчика в браузере (вкладка **Network**), чтобы увидеть, что возвращает сервер. 
-1. Проверьте, не содержит ли ответ HTML (например, сообщения об ошибке PHP).
-2. Убедитесь, что Content-Type установлен как `application/json`.
+    // Проверяем, что запрос не пуст
+    if (!empty($input)) {
+        // SQL-запрос с использованием LIKE
+        $stmt = $pdo->prepare("SELECT DISTINCT column_name FROM your_table WHERE column_name LIKE :query LIMIT 10");
+        $stmt->execute(['query' => '%' . $input . '%']);
 
----
+        // Получаем результаты
+        $results = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-#### 5. **Проверка на наличие ответа**
-Если сервер возвращает `204 No Content` или ответ пуст, это также нужно обработать:
-
-```javascript
-fetch('suggestions.php?query=test')
-    .then(response => {
-        if (response.status === 204) {
-            throw new Error('Нет содержимого');
-        }
-        return response.json();
-    })
-    .then(data => {
-        console.log('Data:', data);
-    })
-    .catch(error => {
-        console.error('Ошибка:', error);
-    });
-```
-
----
-
-#### 6. **Обновлённый пример с учётом всех ошибок**
-
-Вот пример с обработкой всех описанных случаев:
-
-```javascript
-fetch('suggestions.php?query=test')
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-        return response.text(); // Читаем как текст
-    })
-    .then(text => {
-        if (text.trim() === '') {
-            throw new Error('Ответ сервера пуст');
-        }
-        return JSON.parse(text); // Парсим JSON
-    })
-    .then(data => {
-        console.log('Data:', data);
-    })
-    .catch(error => {
-        console.error('Ошибка:', error);
-    });
+        // Возвращаем результаты в формате JSON
+        header('Content-Type: application/json');
+        echo json_encode($results);
+    } else {
+        // Если запрос пустой, возвращаем пустой массив
+        header('Content-Type: application/json');
+        echo json_encode([]);
+    }
+} else {
+    // Если метод не POST, возвращаем ошибку
+    http_response_code(405);
+    echo json_encode(['error' => 'Method not allowed']);
+}
 ```
 
 ---
 
-### Проверка на стороне PHP
+### Объяснение:
+1. **HTML и JavaScript**:
+   - Введён текст отправляется через `POST` методом с использованием `fetch`.
+   - Данные кодируются в формате `application/x-www-form-urlencoded`.
 
-Убедитесь, что PHP-скрипт возвращает валидный JSON:
+2. **PHP**:
+   - Скрипт принимает запрос методом `POST` и читает данные из массива `$_POST`.
+   - Выполняется поиск в базе данных по переданному значению.
+   - Если данные найдены, возвращается JSON-ответ.
 
-1. **Обработка пустых данных**:
-   ```php
-   if (empty($results)) {
-       echo json_encode([]);
-       exit;
-   }
-   ```
-
-2. **Проверка ошибок до вывода**:
-   ```php
-   try {
-       // Ваш код
-       echo json_encode($results);
-   } catch (Exception $e) {
-       http_response_code(500);
-       echo json_encode(['error' => $e->getMessage()]);
-   }
-   ```
+3. **SQL-запрос**:
+   - Замените `your_table` и `column_name` на реальные таблицу и колонку вашей базы данных.
 
 ---
 
-### Резюме
+### Преимущества метода `POST`:
+- Увеличенная безопасность: данные отправляются в теле запроса, а не через URL.
+- Можно отправлять более длинные запросы (в отличие от ограничений URL).
+- Лучше подходит для данных, которые не нужно отображать в адресной строке.
 
-1. Убедитесь, что сервер возвращает корректный JSON.
-2. Проверьте статус ответа перед вызовом `response.json()`.
-3. Обрабатывайте пустой или невалидный ответ.
-4. Используйте отладку в инструментах разработчика.
-
-Эти шаги помогут устранить ошибку `"Unexpected end of JSON input"`.
+Этот подход работает корректно и защищён от проблем с `GET`-параметрами.
