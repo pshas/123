@@ -1,8 +1,8 @@
-Да, конечно! Вы можете передавать данные с `input` с помощью метода `POST`. Для этого нужно внести небольшие изменения в код. Вот пример:
+Давайте доработаем код, чтобы поддерживать два поля ввода (`input`). Каждое из них будет отправлять данные через метод `POST`, и сервер будет обрабатывать запросы для обоих полей.
 
 ---
 
-### 1. **HTML с передачей данных через `POST`**
+### 1. **HTML с двумя полями ввода**
 
 ```html
 <!DOCTYPE html>
@@ -10,7 +10,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Подсказки с использованием POST</title>
+    <title>Подсказки для двух полей</title>
     <style>
         .suggestions {
             border: 1px solid #ccc;
@@ -31,15 +31,19 @@
     </style>
 </head>
 <body>
-    <h1>Подсказки для полей ввода</h1>
-    <input type="text" id="field1" placeholder="Введите что-то">
+    <h1>Подсказки для двух полей ввода</h1>
+
+    <input type="text" id="field1" placeholder="Введите что-то в поле 1">
     <div id="suggestions1" class="suggestions"></div>
+
+    <input type="text" id="field2" placeholder="Введите что-то в поле 2">
+    <div id="suggestions2" class="suggestions"></div>
 
     <script>
         // Функция для отправки данных через POST
-        function fetchSuggestions(query) {
+        function fetchSuggestions(query, fieldId) {
             if (query.length === 0) {
-                document.getElementById('suggestions1').innerHTML = '';
+                document.getElementById(`suggestions${fieldId}`).innerHTML = '';
                 return;
             }
 
@@ -48,18 +52,18 @@
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: `query=${encodeURIComponent(query)}` // Передача данных
+                body: `query=${encodeURIComponent(query)}&fieldId=${fieldId}` // Передача данных
             })
             .then(response => response.json())
             .then(data => {
-                const suggestionsBox = document.getElementById('suggestions1');
+                const suggestionsBox = document.getElementById(`suggestions${fieldId}`);
                 suggestionsBox.innerHTML = '';
 
                 data.forEach(item => {
                     const div = document.createElement('div');
                     div.textContent = item;
                     div.onclick = () => {
-                        document.getElementById('field1').value = item;
+                        document.getElementById(`field${fieldId}`).value = item;
                         suggestionsBox.innerHTML = '';
                     };
                     suggestionsBox.appendChild(div);
@@ -68,9 +72,13 @@
             .catch(error => console.error('Ошибка:', error));
         }
 
-        // Обработчик ввода
+        // Обработчики ввода для двух полей
         document.getElementById('field1').addEventListener('input', (e) => {
-            fetchSuggestions(e.target.value);
+            fetchSuggestions(e.target.value, 1);
+        });
+
+        document.getElementById('field2').addEventListener('input', (e) => {
+            fetchSuggestions(e.target.value, 2);
         });
     </script>
 </body>
@@ -79,9 +87,9 @@
 
 ---
 
-### 2. **PHP-скрипт для обработки POST-запроса**
+### 2. **PHP-скрипт для обработки запросов**
 
-Создайте файл `suggestions.php`:
+В этом скрипте мы будем различать запросы от разных полей с помощью параметра `fieldId`.
 
 ```php
 <?php
@@ -102,11 +110,14 @@ try {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Получаем данные из тела запроса
     $input = $_POST['query'] ?? '';
+    $fieldId = $_POST['fieldId'] ?? '';
 
     // Проверяем, что запрос не пуст
-    if (!empty($input)) {
+    if (!empty($input) && !empty($fieldId)) {
+        $column = $fieldId === '1' ? 'column1' : 'column2'; // Определяем колонку для поиска
+
         // SQL-запрос с использованием LIKE
-        $stmt = $pdo->prepare("SELECT DISTINCT column_name FROM your_table WHERE column_name LIKE :query LIMIT 10");
+        $stmt = $pdo->prepare("SELECT DISTINCT $column FROM your_table WHERE $column LIKE :query LIMIT 10");
         $stmt->execute(['query' => '%' . $input . '%']);
 
         // Получаем результаты
@@ -130,23 +141,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 ---
 
 ### Объяснение:
+
 1. **HTML и JavaScript**:
-   - Введён текст отправляется через `POST` методом с использованием `fetch`.
-   - Данные кодируются в формате `application/x-www-form-urlencoded`.
+   - Для каждого поля ввода (`field1` и `field2`) используется отдельный обработчик `input`.
+   - При вводе данных отправляется запрос через метод `POST` с параметрами:
+     - `query` — текст, введённый пользователем.
+     - `fieldId` — идентификатор поля (1 для `field1` и 2 для `field2`).
+   - Результаты отображаются в соответствующем блоке подсказок (`suggestions1` или `suggestions2`).
 
 2. **PHP**:
-   - Скрипт принимает запрос методом `POST` и читает данные из массива `$_POST`.
-   - Выполняется поиск в базе данных по переданному значению.
-   - Если данные найдены, возвращается JSON-ответ.
+   - В зависимости от `fieldId` выполняется поиск в соответствующей колонке (`column1` для `field1`, `column2` для `field2`).
+   - Возвращается массив данных в формате JSON.
 
 3. **SQL-запрос**:
-   - Замените `your_table` и `column_name` на реальные таблицу и колонку вашей базы данных.
+   - Подставляем название колонки (`column1` или `column2`) для выполнения поиска с помощью оператора `LIKE`.
 
 ---
 
-### Преимущества метода `POST`:
-- Увеличенная безопасность: данные отправляются в теле запроса, а не через URL.
-- Можно отправлять более длинные запросы (в отличие от ограничений URL).
-- Лучше подходит для данных, которые не нужно отображать в адресной строке.
+### Настройка:
 
-Этот подход работает корректно и защищён от проблем с `GET`-параметрами.
+1. Замените `your_table`, `column1`, и `column2` на реальные названия таблицы и колонок в вашей базе данных.
+2. Убедитесь, что сервер возвращает данные корректно.
+
+Теперь оба поля ввода (`field1` и `field2`) будут работать независимо, выполняя поиск в соответствующих колонках.
