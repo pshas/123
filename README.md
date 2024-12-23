@@ -1,103 +1,151 @@
-В Битриксе для управления **группами пользователей** используется класс `CGroup`. Этот класс позволяет создавать, обновлять и удалять группы пользователей через API. 
+Если необходимо искать данные по обоим полям в одной таблице и автозаполнять соответствующее поле ввода при выборе результата, то вот обновленный пример:
 
 ---
 
-### Пример добавления группы пользователей с использованием `CGroup`
-
+### 1. Файл `suggestions.php` (поиск по двум столбцам):
 ```php
 <?php
-
-require($_SERVER["DOCUMENT_ROOT"] . "/bitrix/modules/main/include/prolog_before.php");
-
-if (!$USER->IsAdmin()) {
-    die("Доступ запрещен");
-}
-
-// Подключение класса
-use Bitrix\Main\Loader;
-
-Loader::includeModule("main");
+// Подключение к базе данных
+$host = 'localhost';
+$db = 'your_database';
+$user = 'your_username';
+$pass = 'your_password';
 
 try {
-    // Создаем объект класса CGroup
-    $group = new CGroup;
+    $pdo = new PDO("mysql:host=$host;dbname=$db;charset=utf8", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Ошибка подключения к базе данных: " . $e->getMessage());
+}
 
-    // Параметры новой группы
-    $groupData = [
-        "NAME" => "Название группы", // Название группы
-        "DESCRIPTION" => "Описание группы", // Описание группы
-        "ACTIVE" => "Y", // Активность: Y - активна, N - не активна
-        "STRING_ID" => "custom_group_code", // Символьный идентификатор группы
-    ];
+// Проверка входных данных
+if (isset($_GET['query'])) {
+    $input = $_GET['query'];
 
-    // Проверяем, есть ли уже такая группа
-    $existingGroup = CGroup::GetList($by = "id", $order = "asc", ["STRING_ID" => $groupData["STRING_ID"]])->Fetch();
+    // Указываем таблицу и поля для поиска
+    $table = 'your_table';
+    $columns = ['column1', 'column2']; // Поля для поиска
 
-    if ($existingGroup) {
-        echo "Группа с кодом '{$groupData["STRING_ID"]}' уже существует (ID: {$existingGroup["ID"]}).";
-    } else {
-        // Добавляем группу
-        $newGroupId = $group->Add($groupData);
+    // SQL-запрос с использованием LIKE
+    $query = "SELECT DISTINCT column1, column2 
+              FROM $table 
+              WHERE column1 LIKE :query OR column2 LIKE :query 
+              LIMIT 10";
 
-        if ($newGroupId > 0) {
-            echo "Группа успешно создана! ID новой группы: " . $newGroupId;
-        } else {
-            echo "Ошибка создания группы: " . $group->LAST_ERROR;
+    $stmt = $pdo->prepare($query);
+    $stmt->execute(['query' => '%' . $input . '%']);
+    $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Возвращаем результат в формате JSON
+    header('Content-Type: application/json');
+    echo json_encode($results);
+} else {
+    // Если параметры отсутствуют
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid parameters']);
+}
+?>
+```
+
+---
+
+### 2. HTML-страница (с автозаполнением):
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Подсказки из базы данных</title>
+    <style>
+        .suggestions {
+            border: 1px solid #ccc;
+            max-width: 300px;
+            position: absolute;
+            background: white;
+            z-index: 10;
         }
-    }
-} catch (\Exception $e) {
-    echo "Произошла ошибка: " . $e->getMessage();
-}
+
+        .suggestions div {
+            padding: 5px;
+            cursor: pointer;
+        }
+
+        .suggestions div:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Подсказки для полей ввода</h1>
+    <input type="text" id="field1" placeholder="Введите что-то (поле 1)">
+    <div id="suggestions1" class="suggestions"></div>
+
+    <input type="text" id="field2" placeholder="Введите что-то (поле 2)">
+    <div id="suggestions2" class="suggestions"></div>
+
+    <script>
+        // Функция для получения подсказок
+        function fetchSuggestions(query, fieldId) {
+            if (query.length === 0) {
+                document.getElementById(`suggestions${fieldId}`).innerHTML = '';
+                return;
+            }
+
+            fetch(`suggestions.php?query=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const suggestionsBox = document.getElementById(`suggestions${fieldId}`);
+                    suggestionsBox.innerHTML = '';
+
+                    data.forEach(item => {
+                        const div = document.createElement('div');
+                        div.textContent = fieldId === '1' ? item.column1 : item.column2;
+
+                        div.onclick = () => {
+                            document.getElementById(`field${fieldId}`).value = div.textContent;
+                            suggestionsBox.innerHTML = '';
+                        };
+
+                        suggestionsBox.appendChild(div);
+                    });
+                })
+                .catch(error => console.error('Ошибка:', error));
+        }
+
+        // Обработчики ввода для каждого поля
+        document.getElementById('field1').addEventListener('input', (e) => {
+            fetchSuggestions(e.target.value, '1');
+        });
+
+        document.getElementById('field2').addEventListener('input', (e) => {
+            fetchSuggestions(e.target.value, '2');
+        });
+    </script>
+</body>
+</html>
 ```
 
 ---
 
-### Пояснение:
+### Объяснение:
+1. **PHP**:
+   - SQL-запрос ищет совпадения в обоих столбцах (`column1` и `column2`) с помощью оператора `LIKE`.
+   - Возвращаются оба столбца (`column1` и `column2`) для подсказок.
 
-1. **Класс `CGroup`:**
-   - Класс `CGroup` — стандартный инструмент для работы с группами пользователей.
-   - Основные методы:
-     - `Add($fields)`: добавляет новую группу.
-     - `Update($id, $fields)`: обновляет данные группы.
-     - `Delete($id)`: удаляет группу.
+2. **HTML и JS**:
+   - Для каждого поля ввода (`field1` и `field2`) отображаются соответствующие подсказки.
+   - При выборе подсказки текст автоматически вставляется в поле, откуда производился ввод.
 
-2. **Поля для создания группы (`$groupData`):**
-   - `NAME`: Название группы.
-   - `DESCRIPTION`: Описание группы.
-   - `ACTIVE`: Статус активности (Y — активна, N — не активна).
-   - `STRING_ID`: Символьный идентификатор группы (уникальный код для удобного поиска).
-
-3. **Проверка существования группы:**
-   - Метод `CGroup::GetList()` позволяет найти уже существующую группу по символьному идентификатору (`STRING_ID`).
+3. **Особенности**:
+   - Поле `field1` отображает результаты из столбца `column1`.
+   - Поле `field2` отображает результаты из столбца `column2`.
+   - Поиск происходит одновременно по обоим столбцам.
 
 ---
 
-### Дополнительно: Привязка прав доступа
+### Настройка:
+- Замените `your_table`, `column1`, и `column2` на реальные названия таблицы и колонок.
+- При необходимости можно добавить дополнительные столбцы или усложнить логику подсказок.
 
-После создания группы можно настроить права доступа. Например, дать права группе на доступ к модулю:
-
-```php
-$groupId = $newGroupId; // ID созданной группы
-$moduleId = "main"; // Идентификатор модуля
-$permission = "W"; // Права доступа (W — полный доступ)
-
-CGroup::SetModulePermission($groupId, $moduleId, $permission);
-echo "Права доступа для группы ID {$groupId} успешно установлены.";
-```
-
----
-
-### Получение списка всех групп:
-
-Если нужно вывести все группы, можно использовать следующий код:
-
-```php
-$rsGroups = CGroup::GetList($by = "id", $order = "asc", ["ACTIVE" => "Y"]);
-while ($group = $rsGroups->Fetch()) {
-    echo "ID: {$group["ID"]}, Название: {$group["NAME"]}, Код: {$group["STRING_ID"]}" . PHP_EOL;
-}
-```
-
----
-
-Если вам нужно выполнить что-то более сложное, например, массово добавить пользователей в группу или настраивать права для конкретных разделов, уточните!
+Этот подход обеспечивает поиск по обоим столбцам и корректное автозаполнение.
