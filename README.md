@@ -1,39 +1,43 @@
-function fetchSuggestions(query, fieldId) {
-            if (query.length === 0) {
-                document.getElementById(`suggestions${fieldId}`).innerHTML = '';
-                return;
-            }
+<?
+$dsn = 'mysql:host=localhost;dbname=test_db';
+$username = 'root';
+$password = 'root';
 
-            fetch('get-info.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `query=${encodeURIComponent(query)}&fieldId=${fieldId}` // Передача данных
-            })
-            .then(response => response.json())
-            .then(data => {
-                const suggestionsBox = document.getElementById(`suggestions${fieldId}`);
-                suggestionsBox.innerHTML = '';
+try {
+    $pdo = new PDO($dsn, $username, $password);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch (PDOException $e) {
+    die("Ошибка подключения к базе данных: " . $e->getMessage());
+}
 
-                data.forEach(item => {
-                    const div = document.createElement('div');
-					div.textContent = fieldId === 1 ? item['MODEL'] : item['NAME_IZD'];
-                    div.onclick = () => {
-						document.getElementById(`field${fieldId}`).value = fieldId === 1 ? item['MODEL'] : item['NAME_IZD'];
-						suggestionsBox.innerHTML = '';
-                    };
-                    suggestionsBox.appendChild(div);
-                });
-            })
-            .catch(error => console.error('Ошибка:', error));
-        }
+// Проверка входных данных
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Получаем данные из тела запроса
+    $input = $_POST['query'] ?? '';
+    $fieldId = $_POST['fieldId'] ?? '';
 
-        // Обработчики ввода для двух полей
-        document.getElementById('field1').addEventListener('input', (e) => {
-            fetchSuggestions(e.target.value, 1);
-        });
+    // Проверяем, что запрос не пуст
+    if (!empty($input) && !empty($fieldId)) {
+        $column = $fieldId === '1' ? 'MODEL' : 'NAME_IZD'; // Определяем колонку для поиска
 
-        document.getElementById('field2').addEventListener('input', (e) => {
-            fetchSuggestions(e.target.value, 2);
-        });
+        // SQL-запрос с использованием LIKE
+        $stmt = $pdo->prepare("SELECT * FROM test WHERE $column LIKE :query LIMIT 100");
+        $stmt->execute(['query' => '%' . $input . '%']);
+
+        // Получаем результаты
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Возвращаем результаты в формате JSON
+        header('Content-Type: application/json');
+        echo json_encode($results);
+    } else {
+        // Если запрос пустой, возвращаем пустой массив
+        header('Content-Type: application/json');
+        echo json_encode([]);
+    }
+} else {
+    // Если метод не POST, возвращаем ошибку
+    http_response_code(405);
+    echo json_encode(['error' => 'Method not allowed']);
+}
+?>
