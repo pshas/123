@@ -1,43 +1,14 @@
-<?
-$dsn = 'mysql:host=localhost;dbname=test_db';
-$username = 'root';
-$password = 'root';
-
-try {
-    $pdo = new PDO($dsn, $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (PDOException $e) {
-    die("Ошибка подключения к базе данных: " . $e->getMessage());
-}
-
-// Проверка входных данных
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Получаем данные из тела запроса
-    $input = $_POST['query'] ?? '';
-    $fieldId = $_POST['fieldId'] ?? '';
-
-    // Проверяем, что запрос не пуст
-    if (!empty($input) && !empty($fieldId)) {
-        $column = $fieldId === '1' ? 'MODEL' : 'NAME_IZD'; // Определяем колонку для поиска
-
-        // SQL-запрос с использованием LIKE
-        $stmt = $pdo->prepare("SELECT * FROM test WHERE $column LIKE :query LIMIT 100");
-        $stmt->execute(['query' => '%' . $input . '%']);
-
-        // Получаем результаты
-        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Возвращаем результаты в формате JSON
-        header('Content-Type: application/json');
-        echo json_encode($results);
-    } else {
-        // Если запрос пустой, возвращаем пустой массив
-        header('Content-Type: application/json');
-        echo json_encode([]);
-    }
-} else {
-    // Если метод не POST, возвращаем ошибку
-    http_response_code(405);
-    echo json_encode(['error' => 'Method not allowed']);
-}
-?>
+Январь
+Ожидание получения выделенного сервера на AstraLinux
+Февраль - Март
+Установка и настройка необходимых пакетов (Nginx, PHP, Apache, MariaDB,  Redis, push-server), настройка конфигураций и прав доступа
+Апрель
+Настройка LDAP (подключение к AD и выгрузка пользователей), начало выполнения ТЗ по "Лаборатории"
+Май
+Настройка импорта базы данных (Oracle to mariadb), написание python-скрипта для валидации и корректного отображения данных
+Июнь - Август
+Настройка прав доступа в битрикс, написание функционала "Лаборатории", установка и настройка ELK
+Сентябрь - Октябрь
+Выполнение ТЗ по проекту "Управление прокетами", настройка модулей, создание установка домена и сертификата, настройка redis, восстановление работоспособности сервера после аварийного выключения света
+Ноябрь - Декабрь
+Закрытие модулей "Административная панель" и "Создание заявки" по проекту "Лаборатории"
