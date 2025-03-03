@@ -1,14 +1,55 @@
-Январь
-Ожидание получения выделенного сервера на AstraLinux
-Февраль - Март
-Установка и настройка необходимых пакетов (Nginx, PHP, Apache, MariaDB,  Redis, push-server), настройка конфигураций и прав доступа
-Апрель
-Настройка LDAP (подключение к AD и выгрузка пользователей), начало выполнения ТЗ по "Лаборатории"
-Май
-Настройка импорта базы данных (Oracle to mariadb), написание python-скрипта для валидации и корректного отображения данных
-Июнь - Август
-Настройка прав доступа в битрикс, написание функционала "Лаборатории", установка и настройка ELK
-Сентябрь - Октябрь
-Выполнение ТЗ по проекту "Управление прокетами", настройка модулей, создание установка домена и сертификата, настройка redis, восстановление работоспособности сервера после аварийного выключения света
-Ноябрь - Декабрь
-Закрытие модулей "Административная панель" и "Создание заявки" по проекту "Лаборатории"
+<?
+	require("../header.php");
+?>
+
+<!-- Bootstrap CSS -->
+<link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+
+<!-- Bootstrap JS (зависит от jQuery) -->
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+
+<body>
+	<div class="container">
+		<h1 class="mt-4 mb-4">Задачи</h1>
+		<table class="table table-striped table-bordered">
+		<thead>
+			<tr>
+				<th>Номер</th>
+				<th>Создан</th>
+				<th>Инициатор</th>
+				<th>Цех/Отдел</th>
+				<th>Наименование</th>
+				<th>Номер детали</th>
+				<th>Дата изготовления</th>
+				<th>Номер партии</th>
+				<th>Несоответствие</th>
+				<th>Статус</th>
+			</tr>
+		<thead>
+		<tbody>
+		<? $dsn = 'mysql:host=localhost;dbname=test_db';
+		$username = 'root';
+		$password = 'root';
+
+		$pdo = new PDO($dsn, $username, $password);
+		$user_id = $USER->GetId();
+		$stmt = $pdo->prepare("SELECT * FROM user_applications WHERE is_editable = 0");
+		$stmt->execute();
+		while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+			echo "<tr>";
+				echo "<td>" . htmlspecialchars($row['id']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['created_at']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['full_name']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['work_department']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['NAME_IZD']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['ID_I']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['task']) . "</td>";
+				echo "<td>" . htmlspecialchars($row['status']) . "</td>";
+}
+?>
+		</tbody>
+		</table>
+	</div>
+</body>
