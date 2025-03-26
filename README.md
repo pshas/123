@@ -44,7 +44,7 @@
 					echo "<td>" . htmlspecialchars($row['work_department']) . "</td>";
 					echo "<td>" . htmlspecialchars($row['NAME_IZD']) . "</td>";
 					echo "<td>" . htmlspecialchars($row['ID_I']) . "</td>";
-					echo "<td>" . htmlspecialchars($row['date_manufacture'] ?? '—') . "</td>";
+					echo "<td>" . htmlspecialchars($row['date_man'] ?? '—') . "</td>";
 					echo "<td>" . htmlspecialchars($row['batch_number'] ?? '—') . "</td>";
 					echo "<td>" . htmlspecialchars($row['task']) . "</td>";
 					echo "<td>" . htmlspecialchars($row['status']) . "</td>";
@@ -101,7 +101,7 @@
 						$("#department").val(response.work_department);
 						$("#name").val(response.NAME_IZD);
 						$("#detail").val(response.ID_I);
-						$("#date").val(response.date_manufacture);
+						$("#date").val(response.date_man);
 						$("#batch").val(response.batch_number);
 						$("#task").val(response.task);
 						$("#workModal").modal("show");
@@ -126,22 +126,3 @@
 		});
 	</script>
 </body>
-
-
-
-/////////
-
-<?php
-$dsn = 'mysql:host=localhost;dbname=test_db';
-$username = 'root';
-$password = 'root';
-$pdo = new PDO($dsn, $username, $password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-
-if (isset($_POST['id'])) {
-	$id = $_POST['id'];
-	$stmt = $pdo->prepare("SELECT * FROM user_applications WHERE id = ?");
-	$stmt->execute([$id]);
-	$data = $stmt->fetch(PDO::FETCH_ASSOC);
-	echo json_encode($data);
-}
-?>
