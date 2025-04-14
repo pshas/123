@@ -1,155 +1,118 @@
+/* Базовые настройки */
 .container {
   padding: 2rem;
-  max-width: 100%;
-  overflow-x: auto;
-  background: #f8fafc;
+  background-color: #f9fafb;
   min-height: 100vh;
 }
 
-h1 {
-  color: #1a365d;
+/* Заголовок */
+.page-title {
+  color: #111827;
+  font-size: 1.8rem;
   font-weight: 600;
-  font-size: 2rem;
-  margin-bottom: 2rem;
-  position: relative;
+  margin-bottom: 1.5rem;
   padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-h1::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 60px;
-  height: 3px;
-  background: #4299e1;
-}
-
-.table-container {
-  position: relative;
+/* Контейнер таблицы */
+.table-wrapper {
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 
-              0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
 
-.table {
+/* Сама таблица */
+.data-table {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
+  border-collapse: collapse;
   font-size: 0.95rem;
-  background: white;
 }
 
-.table th {
-  background-color: #2b6cb0;
-  color: white;
-  padding: 1rem 1.25rem;
+/* Шапка таблицы */
+.data-table thead {
+  background-color: #f3f4f6;
+}
+
+.data-table th {
+  padding: 0.875rem 1rem;
   text-align: left;
+  color: #374151;
   font-weight: 500;
-  position: sticky;
-  top: 0;
-  transition: background 0.2s ease;
+  border-bottom: 2px solid #e5e7eb;
 }
 
-.table th:hover {
-  background-color: #2c5282;
+/* Ячейки таблицы */
+.data-table td {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: top;
 }
 
-.table td {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #edf2f7;
-  vertical-align: middle;
-  transition: background 0.15s ease;
+/* Чередование строк */
+.data-table tbody tr:nth-child(even) {
+  background-color: #f9fafb;
 }
 
-.table-striped tbody tr:nth-of-type(even) {
-  background-color: #f8fafc;
+/* Эффект при наведении */
+.data-table tbody tr:hover {
+  background-color: #f0f3f9;
 }
 
-.table tbody tr:hover td {
-  background-color: #ebf8ff;
-  cursor: pointer;
-}
-
-/* Улучшенные кнопки */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+/* Кнопки */
+.action-btn {
+  display: inline-block;
   padding: 0.5rem 1rem;
   border-radius: 6px;
   font-size: 0.875rem;
   font-weight: 500;
-  line-height: 1.5;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  text-align: center;
+  transition: all 0.15s ease;
 }
 
-.btn-sm {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.8125rem;
-}
-
-.btn-success {
-  background-color: #38a169;
+.btn-submit {
+  background-color: #3b82f6;
   color: white;
-  border: none;
+  border: 1px solid #2563eb;
 }
 
-.btn-success:hover {
-  background-color: #2f855a;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+.btn-submit:hover {
+  background-color: #2563eb;
 }
 
-.btn-info {
-  background-color: #4299e1;
+.btn-report {
+  background-color: #10b981;
   color: white;
-  border: none;
+  border: 1px solid #059669;
 }
 
-.btn-info:hover {
-  background-color: #3182ce;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+.btn-report:hover {
+  background-color: #059669;
 }
 
-/* Интерактивные элементы статусов */
-.status-badge {
+/* Статусы */
+.status {
   display: inline-block;
   padding: 0.25rem 0.75rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 0.8125rem;
+  font-weight: 500;
 }
 
 .status-pending {
-  background-color: #fffaf0;
-  color: #dd6b20;
+  background-color: #fef3c7;
+  color: #d97706;
 }
 
 .status-completed {
-  background-color: #f0fff4;
-  color: #38a169;
+  background-color: #d1fae5;
+  color: #059669;
 }
 
 .status-rejected {
-  background-color: #fff5f5;
-  color: #e53e3e;
-}
-
-/* Анимация загрузки */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.table tbody tr {
-  animation: fadeIn 0.3s ease forwards;
+  background-color: #fee2e2;
+  color: #dc2626;
 }
 
 /* Адаптивность */
@@ -158,60 +121,14 @@ h1::after {
     padding: 1rem;
   }
   
-  .table th, 
-  .table td {
+  .data-table th,
+  .data-table td {
     padding: 0.75rem;
-    font-size: 0.85rem;
+    font-size: 0.875rem;
   }
   
-  .table-responsive {
-    display: block;
-    width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  .action-btn {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
   }
-}
-
-/* Подсветка важных ячеек */
-.highlight-cell {
-  position: relative;
-}
-
-.highlight-cell::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  bottom: 2px;
-  left: 2px;
-  border-radius: 4px;
-  background-color: rgba(66, 153, 225, 0.1);
-  pointer-events: none;
-}
-
-/* Интерактивные подсказки */
-[data-tooltip] {
-  position: relative;
-}
-
-[data-tooltip]::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0.5rem 1rem;
-  background: #2d3748;
-  color: white;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-[data-tooltip]:hover::after {
-  opacity: 1;
-  margin-bottom: 5px;
 }
