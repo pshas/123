@@ -1,240 +1,369 @@
-<?php
+Вот код страницы для отображения данных из базы данных, аналогичный вашему примеру:
+
+```php
+<?
 require("../header.php");
+$dsn = 'mysql:host=localhost;dbname=test_db';
+$username = 'root';
+$password = 'root';
+
+$pdo = new PDO($dsn, $username, $password);
+
+// Получаем ID записи из GET-параметра
+$record_id = isset($_GET['record_id']) ? intval($_GET['record_id']) : 0;
+
+// Запрос для получения данных записи
+$sql = $pdo->prepare("
+    SELECT * FROM user_applications 
+    WHERE id = :record_id
+");
+$sql->execute([':record_id' => $record_id]);
+$record = $sql->fetch(PDO::FETCH_ASSOC);
+
+// Если запись не найдена, выводим сообщение
+if (!$record) {
+    die("Запись не найдена");
+}
+
+// Получаем название блока для отображения в заголовке
+$block_sql = $pdo->prepare("
+    SELECT title FROM blocks WHERE id = :block_id
+");
+$block_sql->execute([':block_id' => $record['block_id']]);
+$block_title = $block_sql->fetch(PDO::FETCH_ASSOC);
 ?>
 
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <!-- Bootstrap CSS -->
-<link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-
 <!-- Bootstrap JS (зависит от jQuery) -->
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
 
-<body>
-<!-- Модальное окно для оформления заявки -->
-<div class="modal fade" id="submitModal" tabindex="-1" role="dialog" aria-labelledby="submitModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="submitModalLabel">Оформить заявку</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <form id="submitForm">
-          <input type="hidden" name="template_id" id="templateId" value="">
-          <div class="form-group">
-            <label for="research_object">Объект исследования</label>
-            <input type="text" class="form-control" name="research_object" id="research_object" required>
-          </div>
-          <div class="form-group">
-            <label for="initiator">Инициатор</label>
-            <input type="text" class="form-control" name="initiator" id="initiator" required>
-          </div>
-          <div class="form-group">
-            <label for="created_at">Создано</label>
-            <input type="text" class="form-control" name="created_at" id="created_at" value="<?php echo date('Y-m-d H:i:s'); ?>" readonly>
-          </div>
-          <div class="form-group">
-            <label for="task">Причина обращения</label>
-            <input type="text" class="form-control" name="task" id="task" required>
-          </div>
-          <div class="form-group">
-            <label for="note">Цель испытаний и исследований</label>
-            <textarea class="form-control" name="note" id="note" rows="3" required></textarea>
-          </div>
-          <button type="button" class="btn btn-success" onclick="confirmSubmission()">Подтвердить оформление</button>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
-      </div>
-    </div>
-  </div>
-</div>
+<style>
+    .form, .form * {
+        visibility: visible;
+    }
+    .form {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    
+    /* Улучшение отображения таблицы при печати */
+    table.form {
+        border-collapse: collapse;
+        width: 35%;
+        height: 40%;
+    }
+    table.form td, table.form th {
+        border: 1px solid #000;
+        padding: 4px;
+    }
 
-<!-- Модальное окно для изменения статуса -->
-<div class="modal fade" id="statusModal" tabindex="-1" role="dialog" aria-labelledby="statusModalLabel" aria-hidden="true">
-  <div class="modal-dialog" role="document">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="statusModalLabel">Изменить статус заявки</h5>
-        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
-      <div class="modal-body">
-        <form id="statusForm">
-          <input type="hidden" name="application_id" id="applicationId" value="">
-          <div class="form-group">
-            <label for="status">Новый статус</label>
-            <select class="form-control" name="status" id="statusSelect" required>
-              <option value="приостановлено">Приостановлено</option>
-              <option value="выполнено">Выполнено</option>
-              <option value="отклонено">Отклонено</option>
-              <option value="отменено">Отменено</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="status_note">Комментарий (необязательно)</label>
-            <textarea class="form-control" name="status_note" id="status_note" rows="3"></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
-        <button type="button" class="btn btn-primary" onclick="updateStatus()">Сохранить</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Уведомление об успешном оформлении -->
-<div id="successMessage" class="alert alert-success" style="display:none;">
-    Заявка успешно оформлена!
-</div>
-	<div class="container">
-		<h1 class="mt-4 mb-4">Мои заявки</h1>
-		<table class="table table-striped table-bordered">
-		<thead>
-			<tr>
-				<th>Номер</th>
-				<th>Создан</th>
-				<th>Инициатор</th>
-				<th>Цех/Отдел</th>
-				<th>Наименование</th>
-				<th>Номер детали</th>
-				<th>Дата изготовления</th>
-				<th>Номер партии</th>
-				<th>Несоответствие</th>
-				<th>Статус</th>
-        <th>Действие</th>
-			</tr>
-		<thead>
-		<tbody>
-		<? 
-		$dsn = 'mysql:host=localhost;dbname=test_db';
-		$username = 'root';
-		$password = 'root';
-
-		$pdo = new PDO($dsn, $username, $password);
-		$user_id = $USER->GetId();
-		$stmt = $pdo->prepare("SELECT * FROM user_applications a WHERE user_id =:user_id OR lab_id =:user_id");
-		$stmt->execute([':user_id' => $user_id]);
-		while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-			echo "<tr>";
-				echo "<td>" . htmlspecialchars($row['id']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['created_at']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['full_name']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['work_department']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['NAME_IZD']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['ID_I']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['date_man']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['task']) . "</td>";
-				echo "<td>" . htmlspecialchars($row['status']) . "</td>";
-        echo "<td>";
-        if ($row['is_editable'] === 1) {
-          echo "<button class='btn btn-success btn-sm' onclick='openSubmitModal(" . $row['id'] . ")'>Оформить</button>";
+    @media print {
+        body * {
+            visibility: hidden;
         }
-        if ($row['is_editable'] === 2 && $row['lab_id'] == $user_id) {
-          echo "<a href='report_form.php?id=" . $row['id'] . "' class='btn btn-info btn-sm'>Отчёт</a>";
-          echo "<button class='btn btn-warning btn-sm ml-1' onclick='openStatusModal(" . $row['id'] . ")'>Изменить статус</button>";
+        .form, .form * {
+            visibility: visible;
         }
-        echo "</td>";
-			echo "</tr>";
-		}
-		?>
-		</tbody>
-		</table>
-	</div>
-</body>
+        .form {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+        }
+        .no-print {
+            display: none !important;
+        }
+        
+        /* Улучшение отображения таблицы при печати */
+        table.form {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        table.form td, table.form th {
+            border: 1px solid #000;
+            padding: 8px;
+        }
+    }
+    
+    /* Стиль для кнопки печати */
+    .print-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+    }
+</style>
+
+<form method="POST">
+    <table class="form">
+        <tbody>
+        <tr>
+            <td rowspan="2" colspan="2">
+                Заявка на измерение<br>
+            </td>
+            <td rowspan="1" colspan="2">
+                Дата
+            </td>
+            <td rowspan="1" colspan="2">
+                <? echo date("d.m.y", strtotime($record['date_man'])); ?> <br>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                Номер протокола
+            </td>
+            <td colspan="2">
+                <? echo $block_title['title']; ?>-<? echo date("Y", strtotime($record['date_man'])); ?>-<? echo $record['id']; ?>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                Наименование
+            </td>
+            <td colspan="2">
+                Номер детали
+            </td>
+            <td colspan="2">
+                Дата предоставления на замер
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                <input type="text" id="field2" name="name_izd" style="width: 100%" value="<? echo htmlspecialchars($record['NAME_IZD']); ?>" readonly>
+            </td>
+            <td colspan="2">
+                <input type="text" id="field1" name="id_i" style="width: 100%" value="<? echo htmlspecialchars($record['ID_I']); ?>" readonly>
+            </td>
+            <td colspan="2">
+                <input type="date" value="<? echo htmlspecialchars($record['date_detail']); ?>" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="1">
+                Дата изготовления
+            </td>
+            <td rowspan="1">
+                <input type="date" id="date_man" name="date_man" value="<? echo htmlspecialchars($record['date_man']); ?>" readonly>
+            </td>
+            <td rowspan="3" colspan="1">
+                Поставщик
+            </td>
+            <td rowspan="3">
+                <input type="text" id="COUNTRY" name="country" value="<? echo htmlspecialchars($record['COUNTRY']); ?>" readonly><br>
+            </td>
+            <td rowspan="3" colspan="1">
+                Количество
+            </td>
+            <td rowspan="3">
+                <input type="text" id="count_detail" name="count_detail" value="<? echo htmlspecialchars($record['count_detail']); ?>" readonly> <br>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="1">
+                Дата поставки⁠
+            </td>
+            <td rowspan="1">
+                <input type="date" id="date_del" name="date_del" value="<? echo htmlspecialchars($record['date_del']); ?>" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Номер партии
+            </td>
+            <td>
+                &nbsp;
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                Примечание
+            </td>
+            <td colspan="4">
+                Заполняется сотрудником лаборатории
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                &nbsp;
+            </td>
+            <td colspan="4" style="padding: 0px;">
+                <div style="display: flex; margin: 0px;">
+                    <div style="width: 50%; display: flex; height: auto;"> 
+                        <input type="checkbox" id="material1" name="material1" value="Plastic" <? echo ($record['material'] == 'Plastic') ? 'checked' : ''; ?> disabled>
+                        <label for="material1"> Plastic</label><br>
+                        <input type="checkbox" id="material2" name="material2" value="Metal" <? echo ($record['material'] == 'Metal') ? 'checked' : ''; ?> disabled>
+                        <label for="material2"> Metal</label><br>
+                        <input type="checkbox" id="material" name="material3" value="Painted" <? echo ($record['material'] == 'Painted') ? 'checked' : ''; ?> disabled>
+                        <label for="material3"> Painted</label>
+                    </div>
+                    <div style="width: 50%; display: flex; height: auto;"> 
+                        <input type="checkbox" id="processing1" name="processing1" value="Zeiss" <? echo ($record['processing'] == 'Zeiss') ? 'checked' : ''; ?> disabled>
+                        <label for="processing1"> Zeiss</label><br>
+                        <input type="checkbox" id="processing2" name="processing2" value="LaserTracer" <? echo ($record['processing'] == 'LaserTracer') ? 'checked' : ''; ?> disabled>
+                        <label for="processing2"> LaserTracer</label><br>
+                    </div>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="6">
+                Протокол поставки
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                Дата предоставление детали
+            </td>
+            <td colspan="2">
+                <input type="date" id="date_detail" name="date_detail" value="<? echo htmlspecialchars($record['date_detail']); ?>" readonly>
+            </td>
+            <td colspan="1">
+                Цех/отдел
+            </td>
+            <td rowspan="1">
+                <input type="text" id="WORK_DEPARTMENT" name="work_department" readonly value="<? echo htmlspecialchars($record['work_department']); ?>">
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                Лицо, предоставившее деталь на измерение
+            </td>
+            <td colspan="2" name="full_name">
+                <input type="text" id="FULL_NAME" name="full_name" readonly value="<? echo htmlspecialchars($record['full_name']); ?>" style="width: 100%">
+            </td>
+            <td colspan="1">
+                Тел.
+            </td>
+            <td colspan="1">
+                <input type="text" id="PERSONAL_PHONE" name="personal_phone" value="<? echo htmlspecialchars($record['personal_phone']); ?>" readonly>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="2">
+                Должность
+            </td>
+            <td colspan="2">
+                <input type="text" id="WORK_POSITION" name="work_position" readonly value="<? echo htmlspecialchars($record['work_position']); ?>" style="width: 100%">
+            </td>
+            <td colspan="1">
+                Тел. рабочий
+            </td>
+            <td colspan="1">
+                <input type="text" id="WORK_PHONE" name="work_phone" readonly value="<? echo htmlspecialchars($record['work_phone']); ?>"> 
+            </td>
+        </tr>
+        <tr>
+            <td colspan="6">
+                Предоставленные детали
+            </td>
+        </tr>
+        <tr>
+            <td colspan="4">
+                Наименование
+            </td>
+            <td rowspan="1">
+                Номер детали
+            </td>
+            <td rowspan="1">
+                VIN/Шасси (#CAD Model)
+            </td>
+        </tr>
+        <tr>
+            <td colspan="4">
+                <input type="text" id="field11" style="width: 100%" readonly value="<? echo htmlspecialchars($record['NAME_IZD']); ?>">
+            </td>
+            <td colspan="1">
+                <input type="text" id="field22" style="width: 100%" readonly value="<? echo htmlspecialchars($record['ID_I']); ?>">
+            </td>
+            <td colspan="1">
+                <input type="text" id="VIN" readonly value="<? echo htmlspecialchars($record['vin']); ?>">
+            </td>
+        </tr>
+        <tr>
+            <td colspan="6">
+                Задание для измерения
+            </td>
+        </tr>
+        <tr>
+            <td colspan="6">
+                <input type="text" id="task" name="task" style="width: 100%" value="<? echo htmlspecialchars($record['task']); ?>" readonly> <br>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="6">
+                Обоснование/примечание
+            </td>
+        </tr>
+        <tr>
+            <td colspan="6">
+                <input type="text" id="note" name="note" style="width: 100%" value="<? echo htmlspecialchars($record['note']); ?>" readonly> <br>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="6">
+                Прием/сдача
+            </td>
+        </tr>
+        <tr>
+            <td class="td-col" colspan="6">
+                <div style="display: flex;">
+                    <input type="text" id="note" name="note" style="width: 50%" readonly>
+                    <input type="text" id="note" name="note" style="width: 50%" readonly>
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td colspan="3">
+                Время измерения
+            </td>
+            <td rowspan="1" colspan="2">
+                Сотрудник ОИиУК
+            </td>
+            <td colspan="1">
+                Подпись
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div style="position: fixed; bottom: 20px; right: 20px;">
+        <button onclick="window.print()" class="btn btn-primary no-print">
+            <i class="fas fa-print"></i> Печать
+        </button>
+    </div>
+</form>
 
 <script>
-// Функция для открытия модального окна оформления заявки
-function openSubmitModal(templateId) {
-    document.getElementById('templateId').value = templateId;
-    fetch('get_template_data.php?id=' + templateId)
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            document.getElementById('research_object').value = data.research_object;
-            document.getElementById('initiator').value = data.initiator;
-            document.getElementById('task').value = data.task;
-            document.getElementById('note').value = data.goal;
-            $('#submitModal').modal('show');
-        } else {
-            alert('Не удалось загрузить данные шаблона.');
-        }
-    })
-    .catch(error => {
-        console.error('Ошибка при загрузке данных шаблона:', error);
+function printForm() {
+    // Скрыть лишние элементы
+    document.querySelectorAll('.no-print').forEach(el => {
+        el.style.display = 'none';
     });
-}
-
-// Функция для открытия модального окна изменения статуса
-function openStatusModal(applicationId) {
-    document.getElementById('applicationId').value = applicationId;
-    $('#statusModal').modal('show');
-}
-
-// Функция для подтверждения оформления заявки
-function confirmSubmission() {
-    const templateId = document.getElementById('templateId').value;
-    fetch('confirm_submission.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            id: templateId,
-            status: 'Ожидание',  
-            is_editable: 0      
-        }),
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            $('#submitModal').modal('hide');
-            alert('Заявка успешно оформлена!');
-            location.reload();
-        } else {
-            alert('Ошибка при оформлении заявки.');
-        }
-    })
-    .catch(error => {
-        console.error('Ошибка при оформлении:', error);
-    });
-}
-
-// Функция для обновления статуса заявки
-function updateStatus() {
-    const applicationId = document.getElementById('applicationId').value;
-    const status = document.getElementById('statusSelect').value;
-    const note = document.getElementById('status_note').value;
     
-    fetch('update_status.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            id: applicationId,
-            status: status,
-            note: note
-        }),
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            $('#statusModal').modal('hide');
-            alert('Статус успешно обновлен!');
-            location.reload();
-        } else {
-            alert('Ошибка при обновлении статуса.');
-        }
-    })
-    .catch(error => {
-        console.error('Ошибка при обновлении статуса:', error);
-    });
+    window.print();
+    
+    // Показать обратно после печати
+    setTimeout(() => {
+        document.querySelectorAll('.no-print').forEach(el => {
+            el.style.display = '';
+        });
+    }, 500);
 }
 </script>
+```
+
+Основные особенности этой страницы:
+
+1. Получает ID записи из GET-параметра `record_id`
+2. Загружает данные записи из таблицы `user_applications`
+3. Загружает название блока из таблицы `blocks` для отображения в заголовке
+4. Все поля формы заполнены данными из базы и сделаны read-only
+5. Сохранена оригинальная структура таблицы и стили
+6. Добавлена проверка на существование записи
+7. Все выводимые данные экранированы с помощью `htmlspecialchars()`
+8. Сохранена функциональность печати формы
+
+Для использования этой страницы нужно передавать ID записи в URL, например: `view_record.php?record_id=123`
