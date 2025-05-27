@@ -1,20 +1,12 @@
-В `.section.php` добавьте проверку текущей страницы и установите класс `active`:
+Если файлы `.section.php` есть в каждой папке проекта, настройка активного пункта меню через них может быть неудобной. Вместо этого можно реализовать подсветку активного пункта меню прямо в коде шаблона, сравнивая текущий URL с ссылками меню.
 
-```php
-$this->setFrameMode(true);
-$APPLICATION->AddChainItem($arResult["NAME"], $arResult["LINK"]);
-$currentPage = $APPLICATION->GetCurPage(false);
-if ($currentPage === $arResult["LINK"]) {
-    $arResult["PARAMS"]["class"] = "active";
-}
-```
-
-Измените HTML меню в вашем коде:
+Измените код меню в вашем шаблоне:
 
 ```php
 <div id="navigation" class="navig">
     <div id="menu-container">
         <?php
+        $currentPage = $APPLICATION->GetCurPage(false);
         $menuItems = [
             ["link" => "/local/lab/", "class" => "ga-nav main", "text" => "Главная"],
             ["link" => "/local/lab/my_application", "class" => "ga-nav application", "text" => "Мои заявки"],
@@ -25,7 +17,7 @@ if ($currentPage === $arResult["LINK"]) {
         ];
 
         foreach ($menuItems as $item) {
-            $isActive = $APPLICATION->GetCurPage(false) === $item["link"] ? "active" : "";
+            $isActive = (strpos($currentPage, $item["link"]) === 0) ? "active" : "";
             ?>
             <a href="<?= $item["link"] ?>" class="<?= $item["class"] ?> <?= $isActive ?>"><?= $item["text"] ?></a>
             <?php
@@ -44,4 +36,4 @@ if ($currentPage === $arResult["LINK"]) {
 }
 ```
 
-Это подсветит активный пункт меню на основе текущей страницы.
+Использование `strpos` вместо строгого сравнения учитывает возможные вложенные пути. Это решение не требует изменений в `.section.php` и работает централизованно в шаблоне.
