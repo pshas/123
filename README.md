@@ -1,159 +1,111 @@
-Учитывая, что ваш шаблон лежит в `/bitrix/templates/lab/`, получаем такую структуру:
-
-```
-/bitrix
-  └── templates
-      └── lab
-          ├── header.php
-          ├── footer.php
-          └── styles.css
-```
-
-Ниже — готовый код для каждого файла.
+Поскольку с прямым вызовом `CMenu::Init()` что-то не сходится (Bitrix действительно жёстко ожидает все параметры-строки), давайте вернёмся к «официальному» пути и подключим готовый компонент `bitrix:menu` прямо в вашем `header.php`. Он корректно принимает массивы и сам внутри вызывает именно `CMenu` с правильными параметрами.
 
 ---
 
-## 1. `/bitrix/templates/lab/header.php`
+## 1. Подключаем компонент в шапке
+
+Откройте свой файл шапки
+
+```
+/bitrix/templates/lab/header.php
+```
+
+и вместо всего блока с `new CMenu` вставьте:
 
 ```php
 <?php
-// Подключаем пролог и запускаем админ-панель
-require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/header.php');
+// …должен быть подключён пролог через require '/bitrix/header.php' …
 
-use Bitrix\Main\Loader;
-if (!Loader::includeModule('main')) {
-    // Логировать или вывести ошибку при отсутствии модуля
-}
+use Bitrix\Main\Page\Asset;
+Asset::getInstance()->addCss($templateFolder."/styles.css");
 
-$menu = new CMenu("top");
-$menu->Init([
-    "ROOT_MENU_TYPE"       => "top",
-    "MAX_LEVEL"            => 1,
-    "CHILD_MENU_TYPE"      => "",
-    "USE_EXT"              => "Y",
-    "MENU_CACHE_TYPE"      => "A",
-    "MENU_CACHE_TIME"      => 3600,
+// Подключаем стандартный компонент меню
+$APPLICATION->IncludeComponent(
+  "bitrix:menu",
+  "top",            // ваш шаблон компонента (см. ниже)
+  [
+    "ROOT_MENU_TYPE"        => "top",
+    "MAX_LEVEL"             => "1",
+    "CHILD_MENU_TYPE"       => "",
+    "USE_EXT"               => "Y",
+    "DELAY"                 => "N",
+    "ALLOW_MULTI_SELECT"    => "N",
+    "MENU_CACHE_TYPE"       => "A",
+    "MENU_CACHE_TIME"       => "3600",
     "MENU_CACHE_USE_GROUPS" => "Y",
-    "MENU_CACHE_GET_VARS"  => []
-]);
-
-// Подключаем свой CSS из этой же папки
-Bitrix\Main\Page\Asset::getInstance()->addCss($templateFolder."/styles.css");
+    "MENU_CACHE_GET_VARS"   => []
+  ],
+  false
+);
 ?>
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <?php $APPLICATION->ShowHead(); ?>
-</head>
-<body>
-<?php $APPLICATION->ShowPanel(); ?>
-
-<header class="site-header">
-  <div class="wrapper">
-    <div class="logo">
-      <a href="/local/glab/">GLab</a>
-    </div>
-    <nav id="navigation" class="navig">
-      <div id="menu-container">
-        <?php foreach ($menu->arResult as $item):
-            $cls = $item["PARAMS"]["class"]
-                 . ($item["SELECTED"] ? " active" : "");
-        ?>
-          <a href="<?=htmlspecialcharsbx($item["LINK"])?>"
-             class="<?=htmlspecialcharsbx($cls)?>">
-            <?=htmlspecialcharsbx($item["TEXT"])?>
-          </a>
-        <?php endforeach; ?>
-      </div>
-    </nav>
-  </div>
-</header>
-
-<main class="site-content wrapper">
 ```
+
+> Важно: здесь мы передаём `MENU_CACHE_GET_VARS` как пустой массив — именно так компонент закодирован и ожидает его именно в таком виде.
 
 ---
 
-## 2. `/bitrix/templates/lab/footer.php`
+## 2. Создаём шаблон компонента
+
+Путь для шаблона:
+
+```
+/bitrix/templates/lab/components/bitrix/menu/top/template.php
+```
+
+и файл стилей (если нужно):
+
+```
+/bitrix/templates/lab/components/bitrix/menu/top/style.css
+```
+
+### 2.1. `template.php`
 
 ```php
-</main>
-
-<footer class="site-footer">
-  <div class="wrapper">
-    &copy; <?=date("Y")?> GLab. Все права защищены.
+<?php if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true) die(); ?>
+<div id="navigation" class="navig">
+  <div id="menu-container">
+    <?php foreach ($arResult as $item): ?>
+      <?php
+        // вытаскиваем ваш класс и добавляем active, если SELECTED
+        $cls = $item["PARAMS"]["class"]
+             . ($item["SELECTED"] ? " active" : "");
+      ?>
+      <a href="<?=htmlspecialcharsbx($item["LINK"])?>"
+         class="<?=htmlspecialcharsbx(trim($cls))?>">
+        <?=htmlspecialcharsbx($item["TEXT"])?>
+      </a>
+    <?php endforeach; ?>
   </div>
-</footer>
-
-<?php
-// Подключаем футер Битрикса, закрываем теги и подключаем скрипты
-require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php');
-?>
+</div>
 ```
 
----
+### 2.2. Если нужны локальные стили
 
-## 3. `/bitrix/templates/lab/styles.css`
+**style.css** (опционально, ваши старые правила уже в `/bitrix/templates/lab/styles.css`):
 
 ```css
-/* Обёртка */
-.wrapper {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 15px;
-}
-
-/* Шапка */
-.site-header {
-  background: #fafafa;
-  border-bottom: 1px solid #ddd;
-  padding: 10px 0;
-}
-.site-header .logo a {
-  font-size: 24px;
-  font-weight: bold;
-  color: #333;
-  text-decoration: none;
-}
-
-/* Меню */
-.navig {
-  margin-top: 5px;
-}
-#menu-container {
-  display: flex;
-}
-.ga-nav {
-  margin-right: 20px;
-  text-decoration: none;
-  color: #333;
-  padding: 5px 0;
-  transition: color 0.2s;
-}
-.ga-nav:hover,
-.ga-nav.active {
-  color: #0073e6;
-}
-
-/* Контент */
-.site-content {
-  padding: 20px 0;
-}
-
-/* Футер */
-.site-footer {
-  background: #f0f0f0;
-  text-align: center;
-  padding: 15px 0;
-  font-size: 14px;
-  color: #777;
-}
+/* Переопределять тут можно что угодно */
+#navigation.navig { /* … */ }
+#menu-container a { /* … */ }
 ```
 
 ---
 
-### Что дальше
+## 3. Как это работает
 
-1. **Убедитесь**, что в разделе `/local/glab/` ваши страницы подключают корневые `header.php` и `footer.php`.
-2. **Сбросьте кеш** (Настройки → Производительность → Удалить кеш).
-3. **Проверьте** в браузере `/local/glab/` — должно отрисоваться ваше меню с подсветкой активного пункта.
+1. `IncludeComponent("bitrix:menu", "top", …)` берёт файлы
+
+   * `/bitrix/.top.menu.php` или `/local/glab/.top.menu.php` (ROOT\_MENU\_TYPE=top)
+   * плюс (`USE_EXT=Y`) `/local/glab/.top.menu_ext.php`
+2. Внутри компонента Bitrix правильно передаёт все параметры в `CMenu::Init()`, никакой ошибки `trim(array)` не будет.
+3. Массив `$arResult` попадает в ваш `template.php`, где вы берёте `TEXT`, `LINK`, `PARAMS['class']` и `SELECTED`.
+
+---
+
+## 4. Итоговые шаги
+
+1. Вставьте вызов `IncludeComponent` в `/bitrix/templates/lab/header.php`.
+2. Скопируйте `template.php` в `/bitrix/templates/lab/components/bitrix/menu/top/`.
+3. (Опционально) добавьте/правьте `style.css` в том же каталоге компонента.
+4. Очистите кеш Битрикс.
+5. Обновите `/local/glab/` — меню должно заработать с вашими классами и активными ссылками.
