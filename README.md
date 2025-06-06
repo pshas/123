@@ -281,3 +281,332 @@ BX.ajax.post(
 5. **AJAX-обновление** списка блоков (если нужно) можно реализовать либо через AJAX\_MODE у компонента `news.list`, либо через свой `ajax/get_blocks.php`.
 
 Таким образом вы замените все свои «ручные» POST-скрипты (`add_block.php`, `load_blocks.php`, `remove_block.php` и т. п.) на штатные инфоблок-компоненты и D7-ORM. Вся логика хранения и вывода будет идти через API Битрикс, и одновременно у вас останутся привычные «кнопки» и «блоки» (вёрстка из вашего шаблона).
+
+
+Ниже показано, как создать собственный шаблон для компонента `bitrix:news.list` (который мы используем для вывода «блоков») в рамках вашего шаблона `lab`. Будем называть его `lab_blocks_template`.
+
+> **Примечание по путям**
+> Если ваш текущий шаблон сайта называется `lab` и лежит в папке `/bitrix/templates/lab/`, то конструкция директорий для шаблона компонента будет выглядеть так:
+>
+> ```
+> /bitrix
+>   /templates
+>     /lab
+>       /components
+>         /bitrix
+>           /news.list
+>             /lab_blocks_template
+>               ├── template.php
+>               └── style.css   (опционально)
+> ```
+
+---
+
+## 1. Создаём папку для шаблона
+
+1. В файловой системе вашего проекта перейдите в
+
+   ```
+   /bitrix/templates/lab/components/bitrix/news.list/
+   ```
+2. Создайте в ней папку
+
+   ```
+   lab_blocks_template
+   ```
+3. Внутри `lab_blocks_template` создайте файл `template.php`.
+4. (Опционально) Создайте файл `style.css`, если хотите добавить стили, специфичные именно для списка «блоков».
+
+Получается структура:
+
+```
+/bitrix/templates/lab/components/bitrix/news.list/lab_blocks_template/
+  ├── template.php
+  └── style.css    (опционально)
+```
+
+---
+
+## 2. Пишем `template.php`
+
+Откройте файл
+
+```
+/bitrix/templates/lab/components/bitrix/news.list/lab_blocks_template/template.php
+```
+
+и вставьте туда следующий код:
+
+```php
+<?php if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die(); ?>
+<?php
+/**
+ * Шаблон для вывода элементов инфоблока «Блоки лаборатории».
+ * Переменные, доступные здесь:
+ *   $arParams   — массив параметров компонента (из вызова IncludeComponent)
+ *   $arResult   — результат работы компонента:
+ *                  $arResult["ITEMS"] — массив элементов
+ *   $APPLICATION, $USER, $DB, и т. д. — стандартный набор
+ */
+
+// Подключаем стили шаблона (если он есть)
+$cssPath = $templateFolder . "/style.css";
+if (file_exists($_SERVER['DOCUMENT_ROOT'] . $cssPath)) {
+    Bitrix\Main\Page\Asset::getInstance()->addCss($cssPath);
+}
+?>
+
+<div class="lab-blocks-list">
+    <?php if (empty($arResult["ITEMS"])): ?>
+        <p>Блоки не найдены.</p>
+    <?php else: ?>
+        <?php foreach ($arResult["ITEMS"] as $item): ?>
+            <?php
+            // Каждое $item имеет ключи:
+            //   $item["ID"], $item["NAME"], $item["PREVIEW_TEXT"], 
+            //   $item["PROPERTIES"] (если у вас настроены дополнительные свойства)
+            $blockId   = (int)$item["ID"];
+            $blockName = htmlspecialcharsbx($item["NAME"]);
+            $preview   = htmlspecialcharsbx($item["PREVIEW_TEXT"]);
+            // Примеры: если есть картинки в PREVIEW_PICTURE:
+            $picUrl = "";
+            if (!empty($item["PREVIEW_PICTURE"])) {
+                $picUrl = CFile::GetPath($item["PREVIEW_PICTURE"]);
+            }
+            ?>
+            <div class="lab-block">
+                <?php if ($picUrl): ?>
+                    <div class="lab-block__image">
+                        <img src="<?= htmlspecialcharsbx($picUrl) ?>" alt="<?= $blockName ?>">
+                    </div>
+                <?php endif; ?>
+
+                <div class="lab-block__info">
+                    <h3 class="lab-block__title"><?= $blockName ?></h3>
+                    <?php if ($preview): ?>
+                        <div class="lab-block__desc"><?= $preview ?></div>
+                    <?php endif; ?>
+
+                    <!-- Пример: если у вас в инфоблоке есть свойства -->
+                    <?php if (!empty($item["PROPERTIES"])): ?>
+                        <ul class="lab-block__props">
+                            <?php foreach ($item["PROPERTIES"] as $prop): ?>
+                                <?php
+                                // Пропускаем пустые значения
+                                if (
+                                    !isset($prop["VALUE"]) ||
+                                    $prop["VALUE"] === "" ||
+                                    (is_array($prop["VALUE"]) && empty($prop["VALUE"]))
+                                ) {
+                                    continue;
+                                }
+                                $propName  = htmlspecialcharsbx($prop["NAME"]);
+                                // Значение-массив выводим через запятую
+                                $propValue = is_array($prop["VALUE"])
+                                    ? htmlspecialcharsbx(implode(", ", $prop["VALUE"]))
+                                    : htmlspecialcharsbx($prop["VALUE"]);
+                                ?>
+                                <li>
+                                    <span class="lab-block__prop-name"><?= $propName ?>:</span>
+                                    <span class="lab-block__prop-value"><?= $propValue ?></span>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+
+                    <!-- Кнопка «Оформить» — отправляем на отдельную страницу /local/glab/order.php -->
+                    <form method="POST" action="/local/glab/order.php" class="lab-block__order-form">
+                        <input type="hidden" name="BLOCK_ID" value="<?= $blockId ?>">
+                        <button type="submit" class="lab-block__order-button">Оформить</button>
+                    </form>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</div>
+```
+
+**Пояснения к коду:**
+
+1. **Проверка `if (!$arResult["ITEMS"])`**: если список элементов пуст, выводится сообщение «Блоки не найдены».
+2. **Цикл `foreach ($arResult["ITEMS"] as $item)`**: перебираем каждый элемент.
+
+   * `$item["ID"]` — ID элемента.
+   * `$item["NAME"]` — заголовок.
+   * `$item["PREVIEW_TEXT"]` — «превью», которое вы, возможно, заполняли.
+   * `$item["PREVIEW_PICTURE"]` — если вы загрузили изображение в поле «Анонс картинки».
+   * `$item["PROPERTIES"]` — массив дополнительных свойств (если задавали их в инфоблоке).
+3. **Вывод изображения**: если у элемента задан `PREVIEW_PICTURE`, получить его URL через `CFile::GetPath()`.
+4. **Список свойств**: проходим по `$item["PROPERTIES"]` и выводим их дочерними `<li>`.
+5. **Кнопка «Оформить»**: форма отправляет `BLOCK_ID` на `/local/glab/order.php`.
+
+---
+
+## 3. Пример `style.css` (опционально)
+
+Если вы хотите оформить список «блоков» отдельными стилями, создайте рядом файл
+
+```
+/bitrix/templates/lab/components/bitrix/news.list/lab_blocks_template/style.css
+```
+
+и вставьте туда, например:
+
+```css
+/* Контейнер всего списка */
+.lab-blocks-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin: 0 -10px;
+}
+
+/* Один «блок» */
+.lab-block {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+  width: calc(33.333% - 20px); /* три блока в ряд, с учётом gap */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+}
+
+.lab-block__image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lab-block__info {
+  padding: 15px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.lab-block__title {
+  font-size: 18px;
+  margin: 0 0 10px;
+  color: #333;
+}
+
+.lab-block__desc {
+  flex: 1; /* чтобы описание занимало оставшееся место */
+  font-size: 14px;
+  color: #555;
+  margin-bottom: 15px;
+}
+
+.lab-block__props {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 15px;
+}
+
+.lab-block__props li {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.lab-block__prop-name {
+  font-weight: bold;
+  margin-right: 5px;
+}
+
+.lab-block__order-form {
+  margin-top: auto; /* прижать кнопку «Оформить» к низу блока */
+  text-align: center;
+}
+
+.lab-block__order-button {
+  background-color: #0073e6;
+  color: #fff;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.lab-block__order-button:hover {
+  background-color: #005bb5;
+}
+```
+
+> Если у вас есть уже готовые стили (например, `.lab-block` и т. д.) в вашем основном `styles.css`, вы можете их туда дописать, а файл `style.css` в шаблоне компонента вовсе не создавать.
+
+---
+
+## 4. Вызываем компонент в нужном place
+
+На странице (скажем, это `/local/glab/index.php` или отдельный файл `/local/glab/blocks.php`), где хотите вывести список «блоков», добавьте такой вызов:
+
+```php
+<?php
+require_once($_SERVER['DOCUMENT_ROOT'].'/header.php');
+$APPLICATION->SetTitle("Список лабораторных блоков");
+
+// Подключаем компонент news.list с нашим шаблоном
+$APPLICATION->IncludeComponent(
+    "bitrix:news.list",
+    "lab_blocks_template",  // имя шаблона, который мы создали
+    [
+        "IBLOCK_TYPE"            => "lab",            // тип инфоблока
+        "IBLOCK_ID"              => "lab_blocks",     // ID инфоблока «Блоки лаборатории»
+        "NEWS_COUNT"             => "50",             // сколько элементов вывести
+        "SORT_BY1"               => "ID",
+        "SORT_ORDER1"            => "DESC",
+        "FIELD_CODE"             => [ "ID", "NAME", "PREVIEW_TEXT", "PREVIEW_PICTURE" ],
+        "PROPERTY_CODE"          => [ /* список кодов ваших свойств, например "PRICE" */ ],
+        "CHECK_DATES"            => "Y",
+        "DETAIL_URL"             => "",
+        "AJAX_MODE"              => "N",
+        "CACHE_TYPE"             => "A",
+        "CACHE_TIME"             => "3600",
+        "CACHE_FILTER"           => "N",
+        "CACHE_GROUPS"           => "Y",
+        "PREVIEW_TRUNCATE_LEN"   => "",
+        "ACTIVE_DATE_FORMAT"     => "d.m.Y",
+        "SET_TITLE"              => "N",
+        "SET_BROWSER_TITLE"      => "N",
+        "SET_META_KEYWORDS"      => "N",
+        "SET_META_DESCRIPTION"   => "N",
+        "SET_LAST_MODIFIED"      => "N",
+        "INCLUDE_IBLOCK_INTO_CHAIN" => "N",
+        "ADD_SECTIONS_CHAIN"     => "N",
+        "HIDE_LINK_WHEN_NO_DETAIL" => "N",
+        // …остальные стандартные параметры, если они нужны…
+    ]
+);
+?>
+
+<?php
+require_once($_SERVER['DOCUMENT_ROOT'].'/footer.php');
+?>
+```
+
+1. **`"IBLOCK_TYPE" => "lab"`** и **`"IBLOCK_ID" => "lab_blocks"`** указывайте именно ваши значения.
+2. **`"FIELD_CODE"`** и **`"PROPERTY_CODE"`** — перечислите здесь те поля/свойства, которые хотите получить в `$arResult["ITEMS"][…]`.
+3. **`"AJAX_MODE" => "N"`** (или `"Y"`, если хотите подгрузку через AJAX).
+
+После этого, если вы зайдёте на эту страницу, компонент вытянет все элементы из инфоблока `lab_blocks` и передаст их в созданный вами шаблон `lab_blocks_template`, где они выведутся в том формате, который вы задали в `template.php`.
+
+---
+
+### Подведите итоги
+
+* **Структура**:
+
+  ```
+  /bitrix/templates/lab/components/bitrix/news.list/lab_blocks_template/template.php  
+  /bitrix/templates/lab/components/bitrix/news.list/lab_blocks_template/style.css (опц.)
+  ```
+* **`template.php`**: описывает HTML/PHP-вывод каждого элемента `$item` из `$arResult["ITEMS"]`, включая кнопку «Оформить».
+* **`style.css`**: прописывает стили для `.lab-blocks-list`, `.lab-block`, `.lab-block__order-button` и т. д.
+* **Вызов компонента** (`IncludeComponent`) указывает `lab_blocks_template` как шаблон.
+
+Если у вас ещё остались уточняющие вопросы — напишите, и я добавлю пояснения!
