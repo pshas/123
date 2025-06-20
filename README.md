@@ -1,39 +1,27 @@
-/* высота всего меню */
-#navigation {
-  height: 70px;
-}
-
-/* контейнер пунктов — делаем флекс, чтобы пункты шли в ряд */
-#navigation #menu-container {
+/* Шапка: логотип и меню в один ряд, по центру по высоте */
+.site-header .wrapper {
   display: flex;
+  align-items: center;        /* вертикальное выравнивание по центру */
+  justify-content: space-between; /* логотип слева, меню справа */
+  height: 70px;               /* чтобы совпало с высотой меню */
 }
 
-/* стили для каждого пункта (аналог .item) */
-#navigation .ga-nav {
-  width: 192px;
-  color: #fff;
-  background-color: #78ccfd;
-  /* скорректируйте путь к изображению-разделителю */
-  background-image: url('/bitrix/templates/lab/img/menu-sepa.jpg');
-  background-repeat: no-repeat;
-  background-position: left center;
-  text-transform: uppercase;
-  text-align: center;
-  line-height: 70px;
-  font-size: 14px;
-  font-weight: 400;
-  cursor: pointer;
-  display: block;
-  text-decoration: none;
+/* Навигация: убираем лишние отступы, подгоняем под шапку */
+#navigation {
+  height: 100%;               /* занимает всю высоту .wrapper */
+  display: flex;
+  align-items: center;        /* вертикально по центру */
+  margin: 0;                  /* убираем внешние отступы */
+  padding: 0;                 /* убираем внутренние отступы */
 }
 
-/* убираем первый разделитель */
-#navigation .ga-nav:first-child {
-  background-image: none;
+/* Пунты меню */
+#menu-container {
+  display: flex;
+  height: 100%;
 }
 
-/* активный и hovered состояние */
-#navigation .ga-nav.active,
-#navigation .ga-nav:hover {
-  background-color: #248fca;
+/* Если нужно подсунуть меню ближе к логотипу */
+#navigation {
+  margin-left: 20px; /* подберите нужное значение */
 }
