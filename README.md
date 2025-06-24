@@ -1,38 +1,101 @@
-```php
-<?php if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die(); ?>
+<?php
+// Привязываем движок и шаблон
+require_once($_SERVER['DOCUMENT_ROOT'].'/header.php');
+$APPLICATION->SetTitle("Добавить подразделение");
 
-<div id="companies" class="row">
-    <?php foreach ($arResult["ITEMS"] as $item): 
-        // Ссылка
-        $link = htmlspecialcharsbx(
-            $item["DETAIL_PAGE_URL"]
-            ?: $item["LIST_PAGE_URL"]
-            ?: "/local/glab/"
-        );
+// Подключаем модуль «Инфоблоки»
+\Bitrix\Main\Loader::includeModule('iblock');
 
-        // Заголовок
-        $name = htmlspecialcharsbx($item["NAME"]);
+$iblockId = 10; // <-- ваш ID инфоблока «Блоки лаборатории»
+$errors = [];
 
-        // Описание из свойства DESCRIPTION
-        $desc = "";
-        if (!empty($item["PROPERTIES"]["DESCRIPTION"]["VALUE"])) {
-            $val = $item["PROPERTIES"]["DESCRIPTION"]["VALUE"];
-            $desc = is_array($val)
-                ? htmlspecialcharsbx(implode(", ", $val))
-                : htmlspecialcharsbx($val);
+// Обработка отправки формы
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && check_bitrix_sessid()) {
+    $parentId   = (int)$_POST['PARENT_ID'];
+    $name       = trim($_POST['NAME']);
+    $description= trim($_POST['DESCRIPTION']);
+
+    if ($parentId <= 0) {
+        $errors[] = "Нужно выбрать компанию-родителя.";
+    }
+    if ($name === "") {
+        $errors[] = "Введите название подразделения.";
+    }
+
+    if (empty($errors)) {
+        $bs = new CIBlockSection;
+        $arFields = [
+            "ACTIVE"            => "Y",
+            "IBLOCK_ID"         => $iblockId,
+            "NAME"              => $name,
+            "DESCRIPTION"       => $description,
+            "IBLOCK_SECTION_ID" => $parentId,
+        ];
+        if ($newId = $bs->Add($arFields)) {
+            LocalRedirect("/local/glab/index.php?sub_added=Y");
+        } else {
+            $errors[] = "Ошибка при добавлении: " . $bs->LAST_ERROR;
         }
+    }
+}
 
-        // Картинка: PREVIEW_PICTURE или плейсхолдер
-        $pictureUrl = !empty($item["PREVIEW_PICTURE"])
-            ? CFile::GetPath($item["PREVIEW_PICTURE"])
-            : $templateFolder . "/img/company.png";
-        $pictureUrl = htmlspecialcharsbx($pictureUrl);
-    ?>
-        <a class="item col-md" href="<?= $link ?>">
-            <div class="icon" style="background-image: url('<?= $pictureUrl ?>');"></div>
-            <div class="title"><?= $name ?></div>
-            <div class="text"><?= nl2br($desc) ?></div>
-        </a>
-    <?php endforeach; ?>
+// Получим список компаний (разделов верхнего уровня)
+$rs = CIBlockSection::GetList(
+    ["NAME"=>"ASC"],
+    ["IBLOCK_ID"=>$iblockId, "SECTION_ID"=>0, "ACTIVE"=>"Y"],
+    false,
+    ["ID","NAME"]
+);
+$companies = [];
+while ($row = $rs->Fetch()) {
+    $companies[$row['ID']] = $row['NAME'];
+}
+?>
+
+<div class="form-container">
+    <h2>Добавить подразделение</h2>
+
+    <?php if ($errors): ?>
+        <div class="errors">
+            <?php foreach ($errors as $e): ?>
+                <p style="color:red;"><?= htmlspecialcharsbx($e) ?></p>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <form method="post">
+        <?= bitrix_sessid_post() ?>
+        <div class="field">
+            <label>Компания-родитель</label><br>
+            <select name="PARENT_ID">
+                <option value="">-- выберите компанию --</option>
+                <?php foreach ($companies as $id => $nm): ?>
+                    <option value="<?= $id ?>"
+                      <?= ($_POST['PARENT_ID']==$id?'selected':'') ?>>
+                      <?= htmlspecialcharsbx($nm) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+
+        <div class="field">
+            <label>Название подразделения</label><br>
+            <input type="text" name="NAME"
+                   value="<?= htmlspecialcharsbx($_POST['NAME'] ?? '') ?>"
+                   style="width:100%;">
+        </div>
+
+        <div class="field">
+            <label>Описание</label><br>
+            <textarea name="DESCRIPTION"
+                      style="width:100%; height:120px;"><?= htmlspecialcharsbx($_POST['DESCRIPTION'] ?? '') ?></textarea>
+        </div>
+
+        <div class="field">
+            <button type="submit">Добавить</button>
+            <a href="/local/glab/index.php">Отмена</a>
+        </div>
+    </form>
 </div>
-```
+
+<?php require_once($_SERVER['DOCUMENT_ROOT'].'/footer.php'); ?>
