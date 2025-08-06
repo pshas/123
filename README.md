@@ -1,198 +1,134 @@
-Ниже полный код вашего `template.php` с поддержкой “аккордеона”: при клике на название компании будут плавно показываться или скрываться её подразделения. Положите его в
+Ниже пример, как разделить вывод «компаний» и «подразделений» на две разные страницы.
+
+---
+
+## 1. Меняем шаблон списка компаний
+
+Вместо аккордеона на той же странице, теперь каждая компания будет ссылкой на отдельную страницу `/local/glab/subdivisions.php`. Откройте ваш файл
 
 ```
 /bitrix/templates/lab/components/bitrix/news.list/lab_blocks_template/template.php
 ```
 
-и обновите `style.css` того же шаблона, чтобы всё работало.
+и замените его на:
+
+```php
+<?php if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED!==true) die(); ?>
+
+<div id="companies" class="row">
+    <?php
+    CModule::IncludeModule("iblock");
+    $rsCompanies = CIBlockSection::GetList(
+        ["SORT"=>"ASC"],
+        ["IBLOCK_ID"=>$arParams["IBLOCK_ID"], "SECTION_ID"=>0, "ACTIVE"=>"Y"],
+        false,
+        ["ID","NAME","DESCRIPTION"]
+    );
+    while ($comp = $rsCompanies->Fetch()):
+        $id   = (int)$comp["ID"];
+        $name = htmlspecialcharsbx($comp["NAME"]);
+        $desc = nl2br(htmlspecialcharsbx($comp["DESCRIPTION"]));
+    ?>
+    <a class="item col-md" href="/local/glab/subdivisions.php?company_id=<?= $id ?>">
+        <div class="icon" style="background-image:url('<?= $templateFolder ?>/img/company.png');"></div>
+        <div class="title"><?= $name ?></div>
+        <div class="text"><?= $desc ?></div>
+    </a>
+    <?php endwhile; ?>
+</div>
+```
+
+* убрали вложенные циклы, каждая `<a>` ведёт на `subdivisions.php?company_id=ID`.
 
 ---
 
-### `template.php`
+## 2. Создаём страницу вывода подразделений
+
+Создайте файл `/local/glab/subdivisions.php` со следующим содержанием:
 
 ```php
 <?php
-if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) die();
+// 1) Запускаем шаблон сайта
+require_once $_SERVER['DOCUMENT_ROOT'].'/header.php';
+\Bitrix\Main\Loader::includeModule('iblock');
 
-// Подключаем CSS
-$cssFile = $templateFolder . "/style.css";
-if (file_exists($_SERVER['DOCUMENT_ROOT'] . $cssFile)) {
-    \Bitrix\Main\Page\Asset::getInstance()->addCss($cssFile);
+// 2) Получаем ID компании из GET
+$companyId = isset($_GET['company_id']) ? (int)$_GET['company_id'] : 0;
+if ($companyId <= 0) {
+    ShowError("Компания не выбрана");
+    require_once $_SERVER['DOCUMENT_ROOT'].'/footer.php';
+    exit;
 }
 
-// Подключаем jQuery, если ещё не подключён (можно использовать и чистый JS)
-\CJSCore::Init(['jquery']);
+// 3) Заголовок страницы — название компании
+$rs = CIBlockSection::GetByID($companyId);
+if ($ar = $rs->Fetch()) {
+    $APPLICATION->SetTitle("Подразделения: ".$ar['NAME']);
+} else {
+    ShowError("Компания не найдена");
+    require_once $_SERVER['DOCUMENT_ROOT'].'/footer.php';
+    exit;
+}
+
+// 4) Выводим подразделения
 ?>
-
-<div id="companies" class="company-list">
+<div id="companies" class="row">
     <?php
-    // Загружаем модуль инфоблоков
-    \CModule::IncludeModule("iblock");
-
-    // 1) Выбираем компании (разделы 1 уровня)
-    $rsCompanies = CIBlockSection::GetList(
-        ["SORT" => "ASC"],
-        ["IBLOCK_ID" => $arParams["IBLOCK_ID"], "SECTION_ID" => 0, "ACTIVE" => "Y"],
+    $rsSubs = CIBlockSection::GetList(
+        ["SORT"=>"ASC"],
+        ["IBLOCK_ID"=>10, "SECTION_ID"=>$companyId, "ACTIVE"=>"Y"], // замените 10 на ваш IBLOCK_ID
         false,
-        ["ID", "NAME"]
+        ["ID","NAME","DESCRIPTION","DETAIL_PAGE_URL"]
     );
-    while ($company = $rsCompanies->Fetch()):
-        $companyId   = (int)$company["ID"];
-        $companyName = htmlspecialcharsbx($company["NAME"]);
+    while ($sub = $rsSubs->Fetch()):
+        $id   = (int)$sub["ID"];
+        $name = htmlspecialcharsbx($sub["NAME"]);
+        $desc = nl2br(htmlspecialcharsbx($sub["DESCRIPTION"]));
+        $link = htmlspecialcharsbx($sub["DETAIL_PAGE_URL"] ?: "#");
     ?>
-    <div class="company-group" data-company-id="<?= $companyId ?>">
-        <div class="company-header">
-            <?= $companyName ?>
-            <span class="toggle-icon">+</span>
-        </div>
-        <div class="subdivisions">
-            <?php
-            // 2) Берём подразделения этой компании (разделы 2 уровня)
-            $rsSubs = CIBlockSection::GetList(
-                ["SORT" => "ASC"],
-                [
-                  "IBLOCK_ID"  => $arParams["IBLOCK_ID"],
-                  "SECTION_ID" => $companyId,
-                  "ACTIVE"     => "Y"
-                ],
-                false,
-                ["ID", "NAME", "DESCRIPTION", "DETAIL_PAGE_URL", "UF_ICON"]
-            );
-            while ($sub = $rsSubs->Fetch()):
-                $subId    = (int)$sub["ID"];
-                $subName  = htmlspecialcharsbx($sub["NAME"]);
-                $subDesc  = htmlspecialcharsbx($sub["DESCRIPTION"]);
-                // ссылка на подраздел
-                $subLink  = htmlspecialcharsbx($sub["DETAIL_PAGE_URL"] ?: "#");
-                // иконка подразделения, если есть UF_ICON
-                $iconUrl  = !empty($sub["UF_ICON"])
-                    ? CFile::GetPath($sub["UF_ICON"])
-                    : ($templateFolder . "/img/company.png");
-                $iconUrl  = htmlspecialcharsbx($iconUrl);
-            ?>
-            <a class="item col-md" href="<?= $subLink ?>">
-                <div class="icon" style="background-image:url('<?= $iconUrl ?>');"></div>
-                <div class="title"><?= $subName ?></div>
-                <div class="text"><?= nl2br($subDesc) ?></div>
-            </a>
-            <?php endwhile; ?>
-        </div>
-    </div>
+    <a class="item col-md" href="<?= $link ?>">
+        <div class="icon" style="background-image:url('<?= $templateFolder ?>/img/company.png');"></div>
+        <div class="title"><?= $name ?></div>
+        <div class="text"><?= $desc ?></div>
+    </a>
     <?php endwhile; ?>
 </div>
 
-<script>
-  (function($){
-    $('#companies .company-header').on('click', function(){
-      var $grp = $(this).closest('.company-group'),
-          $subs = $grp.find('> .subdivisions'),
-          $icon = $(this).find('.toggle-icon');
-      $subs.slideToggle(200);
-      $icon.text($subs.is(':visible') ? '–' : '+');
-    });
-  })(jQuery);
-</script>
+<?php
+// 5) Подключаем общий футер
+require_once $_SERVER['DOCUMENT_ROOT'].'/footer.php';
 ```
+
+* **Не забудьте** заменить `10` в фильтре на реальный `IBLOCK_ID` вашего инфоблока.
 
 ---
 
-### `style.css`
+## 3. Стили
+
+Если у вас уже есть в `style.css` правила для `#companies .item`, `.icon`, `.title`, `.text` — достаточно сбросить кеш. Иначе проверьте, что в `/bitrix/templates/lab/components/bitrix/news.list/lab_blocks_template/style.css` присутствуют:
 
 ```css
-/* Список компаний */
-.company-list {
-  margin: 30px 0;
+#companies { display:flex; flex-wrap:wrap; gap:26px; margin:30px 0; }
+#companies .item {
+  width:268px; background:#fff; padding:15px; text-decoration:none; color:inherit;
 }
-
-/* Блок компании */
-.company-group {
-  margin-bottom: 20px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  overflow: hidden;
+#companies .item .icon {
+  height:75px; background-size:contain; background-repeat:no-repeat; margin-bottom:10px;
 }
-
-/* Заголовок компании */
-.company-header {
-  background: #78ccfd;
-  color: #fff;
-  padding: 15px;
-  font-size: 18px;
-  font-weight: 600;
-  cursor: pointer;
-  position: relative;
+#companies .item .title {
+  margin:10px 0; font-size:20px; font-weight:600;
 }
-
-/* Плюс/минус */
-.company-header .toggle-icon {
-  position: absolute;
-  right: 15px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 20px;
-}
-
-/* Контейнер подразделений (по умолчанию скрыт) */
-.subdivisions {
-  display: none;
-  padding: 15px;
-  background: #f9f9f9;
-}
-
-/* Вёрстка подразделений */
-.subdivisions.row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-}
-
-/* Одна карточка подразделения */
-.subdivisions .item {
-  display: block;
-  width: 268px;
-  margin-bottom: 26px;
-  margin-right: 26px;
-  background: #fff;
-  padding: 15px;
-  box-sizing: border-box;
-  text-decoration: none;
-  color: inherit;
-}
-
-.subdivisions .item:nth-child(4n) {
-  margin-right: 0;
-}
-
-/* Иконка */
-.subdivisions .item .icon {
-  height: 75px;
-  background-size: contain;
-  background-repeat: no-repeat;
-  background-position: center;
-  margin-bottom: 10px;
-}
-
-/* Заголовок подразделения */
-.subdivisions .item .title {
-  margin: 10px 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-/* Описание подразделения */
-.subdivisions .item .text {
-  font-size: 16px;
-  line-height: 1.4;
-  color: #555;
-  height: 160px;
-  overflow: hidden;
+#companies .item .text {
+  font-size:18px; line-height:1.4; height:160px; overflow:hidden;
 }
 ```
 
 ---
 
-**Что получится**
+### Итог
 
-* Вы увидите список компаний — только их заголовки, каждая с “+” справа.
-* При клике на заголовок компания разворачивается (подразделения плавно появляются) и “+” меняется на “–”.
-* Подразделения показываются в знакомом вам стиле карточек.
+1. **template.php** теперь выводит только компании и ссылки на `subdivisions.php?company_id=...`
+2. **subdivisions.php** получает `company_id`, выводит заголовок и подгружает только подразделения этой компании.
+3. **Стили** остаются теми же, что вы уже настроили для карточек.
+
+После очистки кеша и перехода на `/local/glab/subdivisions.php?company_id=15` (пример) вы увидите список подразделений выбранной компании на отдельной странице.
