@@ -1,73 +1,172 @@
-1. В файле вывода заявок (`orders.php`), замените фрагмент с ФИО на ссылку на новую страницу профиля:
+В вашем шаблоне `header.php` (в `/bitrix/templates/lab/header.php`) сделайте две вещи:
 
-   ```diff
-   <!-- Вместо -->
-   - <td><?= htmlspecialcharsbx($el['PROPERTY_FULL_NAME_VALUE']) ?></td>
-   <!-- Сделайте так -->
-   <td>
-     <?php
-       $uid = (int)$el['PROPERTY_USER_ID_VALUE'];
-       $fio = htmlspecialcharsbx($el['PROPERTY_FULL_NAME_VALUE']);
-       $url = "/local/glab/user.php?user_id={$uid}";
-     ?>
-     <a href="<?= $url ?>"><?= $fio ?></a>
-   </td>
-   ```
+1. **Выведите ФИО авторизованного пользователя как ссылку** на страницу профиля.
+2. **Создайте файл** `/local/glab/application/profile.php`, который по `user_id` покажет данные сотрудника и его заявки.
 
-2. Создайте страницу `/local/glab/user.php`, куда будет передаваться `user_id`, и в ней подключите профиль пользователя через готовый компонент:
+---
 
-   ```php
-   <?php
-   // /local/glab/user.php
-   require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/header.php';
-   use Bitrix\Main\Loader;
+## 1. Правим `header.php`
 
-   global $USER;
-   Loader::includeModule('intranet'); // или 'main', если нужно
-   $userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : 0;
-   if ($userId <= 0) {
-       ShowError("Пользователь не найден");
-       require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php';
-       exit;
-   }
+Найдите в начале файла, сразу после `<?php if(!defined("B_PROLOG_INCLUDED") …)` блок, где выводится админ-панель и лого, и вставьте туда:
 
-   // Устанавливаем заголовок
-   $res = CUser::GetByID($userId);
-   if ($arUser = $res->Fetch()) {
-       $APPLICATION->SetTitle($arUser['LAST_NAME'].' '.$arUser['NAME']);
-   } else {
-       ShowError("Пользователь не найден");
-       require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php';
-       exit;
-   }
+```diff
+  <?php $APPLICATION->ShowPanel(); ?>
+  <header class="site-header">
+    <div class="wrapper">
+      <div class="logo">
+        <a href="/local/glab/">GLab</a>
+      </div>
 
-   // Подключаем компонент просмотра профиля
-   $APPLICATION->IncludeComponent(
-       "bitrix:intranet.user.profile",
-       "",
-       [
-           "USER_PROPERTY"      => [],           // вывод всех свойств
-           "USER_PROPERTY_NAME" => "",           
-           "PATH_TO_USER"       => "",           
-           "AJAX_MODE"          => "N",
-           "SET_TITLE"          => "N",
-           "USER_VAR"           => "user_id",
-           "USER_ID"            => $userId,
-       ]
-   );
++     <?php
++     global $USER;
++     if($USER->IsAuthorized()):
++         // Ссылка на профиль
++         $uid = $USER->GetID();
++         $fio = htmlspecialcharsbx($USER->GetFullName());
++     ?>
++       <nav id="user-nav">
++         <a href="/local/glab/application/profile.php?user_id=<?= $uid ?>"
++            class="user-link"><?= $fio ?></a>
++       </nav>
++     <?php endif; ?>
 
-   require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php';
-   ```
+      <?php
+      $APPLICATION->IncludeComponent(
+        "bitrix:menu","top",[/*…*/],false
+      );
+      ?>
+    </div>
+  </header>
+```
 
-3. Проверьте, чтобы у вас был модуль «Интранет» (для `bitrix:intranet.user.profile`) или замените на `bitrix:main.profile.view`, если используете стандартный:
+Добавьте в ваш CSS (рядом со стилями меню) например:
 
-   ```php
-   $APPLICATION->IncludeComponent(
-     "bitrix:main.profile.view",
-     "",
-     ["USER_ID"=>$userId,"PATH_TO_LIST"=>"/local/glab/application/orders.php","SET_TITLE"=>"N"],
-     false
-   );
-   ```
+```css
+#user-nav {
+  display: inline-block;
+  margin-left: 20px;
+}
+.user-link {
+  color: #fff;
+  text-decoration: none;
+  padding: 5px 10px;
+  transition: background .2s;
+}
+.user-link:hover {
+  background: rgba(255,255,255,0.1);
+}
+```
 
-Теперь в таблице «Мои заявки» ФИО — это ссылка на страницу `/local/glab/user.php?user_id=…`, где компонент автоматически выведет всю доступную информацию о пользователе из Битрикс (имя, e-mail, отдел, телефон, фото и прочее).
+---
+
+## 2. Создаём `profile.php`
+
+Создайте файл `/local/glab/application/profile.php`:
+
+```php
+<?php
+// /local/glab/application/profile.php
+require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/header.php';
+use Bitrix\Main\Loader;
+global $USER;
+
+// 1) Получаем user_id из GET
+$profileId = (int)($_GET['user_id'] ?? 0);
+if($profileId <= 0) {
+    ShowError("Не указан сотрудник");
+    require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php';
+    exit;
+}
+
+// 2) Проверяем права: лаборанты (группа 8) видят любого, остальные — только свой
+Loader::includeModule('main');
+$groups = $USER->GetUserGroupArray();
+if(!in_array(8, $groups, true) && $USER->GetID() !== $profileId) {
+    ShowError("Доступ запрещён");
+    require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php';
+    exit;
+}
+
+// 3) Получаем данные пользователя
+$rsUser = CUser::GetByID($profileId);
+$arUser = $rsUser->Fetch();
+if(!$arUser) {
+    ShowError("Сотрудник не найден");
+    require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php';
+    exit;
+}
+
+// 4) Устанавливаем заголовок
+$APPLICATION->SetTitle("Профиль: ".$arUser['NAME'].' '.$arUser['LAST_NAME']);
+
+?>
+<h1><?= $APPLICATION->GetTitle() ?></h1>
+
+<table>
+  <tr><th>ФИО</th><td><?= htmlspecialcharsbx($arUser['NAME'].' '.$arUser['LAST_NAME']) ?></td></tr>
+  <tr><th>Логин</th><td><?= htmlspecialcharsbx($arUser['LOGIN']) ?></td></tr>
+  <tr><th>Отдел</th><td><?= htmlspecialcharsbx($arUser['WORK_DEPARTMENT']) ?></td></tr>
+  <tr><th>Должность</th><td><?= htmlspecialcharsbx($arUser['WORK_POSITION']) ?></td></tr>
+  <tr><th>Телефон</th><td><?= htmlspecialcharsbx($arUser['PERSONAL_PHONE']) ?></td></tr>
+  <!-- сюда при необходимости другие поля профиля -->
+</table>
+
+<hr>
+
+<h2>Заявки сотрудника</h2>
+<?php
+// 5) Подключаем iblock и выводим его заявки
+Loader::includeModule('iblock');
+$iblockCode = 'lab_orders';
+$rsI = CIBlock::GetList([], ['CODE'=>$iblockCode,'ACTIVE'=>'Y']);
+$ib = $rsI->Fetch();
+$iblockId = (int)$ib['ID'];
+
+// Получаем заявки по свойству USER_ID
+$rs = CIBlockElement::GetList(
+    ['DATE_CREATE'=>'DESC'],
+    [
+      'IBLOCK_ID'=> $iblockId,
+      'ACTIVE'=>'Y',
+      'PROPERTY_USER_ID' => $profileId
+    ],
+    false,false,
+    ['ID','NAME','DATE_CREATE','PROPERTY_STATUS']
+);
+
+if($rs->SelectedRowsCount()==0) {
+    echo "<p>Заявок нет.</p>";
+} else {
+    echo '<table border="1" cellpadding="5"><thead>
+      <tr><th>ID</th><th>Дата</th><th>Статус</th><th>Просмотр</th></tr>
+    </thead><tbody>';
+    while($el = $rs->Fetch()) {
+        $view = "/local/glab/application/index.php?block_id=".$el['IBLOCK_SECTION_ID']
+              ."&order_id=".$el['ID'];
+        echo "<tr>
+          <td>{$el['ID']}</td>
+          <td>{$el['DATE_CREATE']}</td>
+          <td>".htmlspecialcharsbx($el['PROPERTY_STATUS_VALUE'])."</td>
+          <td><a href='{$view}'>Открыть</a></td>
+        </tr>";
+    }
+    echo '</tbody></table>';
+}
+?>
+
+<?php
+require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php';
+?>
+```
+
+---
+
+**Что получится:**
+
+* В шапке у авторизованного пользователя вместо обычного меню появится его ФИО — ссылка на `/profile.php?user_id=…`.
+* На странице профиля отображаются данные сотрудника и список всех заявок, где свойство `USER_ID` равно этому `user_id`.
+* Доступ проверяется:
+
+  * **Лаборанты** (группа 8) смотрят **любого** пользователя;
+  * **Обычные** — только **свои** заявки.
+  * 
