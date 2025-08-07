@@ -1,65 +1,173 @@
-Чтобы подразделение сразу открывало форму вашего «application» (тот самый набор `index.php`/`get-info.php`/`submit.php` в папке `glab/application`), достаточно превратить ссылку на подразделение в прямой переход на
-
-```
-/local/glab/application/index.php?block_id=<ID_подразделения>
-```
-
-где `block_id` берётся из поля `$_GET['block_id']` внутри `application/index.php` .
-
----
-
-### Обновлённый фрагмент `subdivisions.php`
+Ниже пример скрипта, который создаст в вашем Битриксе через API D7/CIBlock:
 
 ```php
 <?php
-require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/header.php';
-\Bitrix\Main\Loader::includeModule('iblock');
+use Bitrix\Main\Loader;
+use Bitrix\Iblock\IblockTable;
 
-// Определяем IBLOCK_ID по символьному коду "lab_blocks" (как делали ранее)
-$rsI = CIBlock::GetList([], ["CODE"=>"lab_blocks","ACTIVE"=>"Y"], false);
-$ib = $rsI->Fetch();
-$iblockId = (int)$ib['ID'];
+require_once($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
+Loader::includeModule('iblock');
 
-// Получаем ID компании
-$companyId = (int)($_GET['company_id'] ?? 0);
-$rsC = CIBlockSection::GetByID($companyId);
-if (!$company = $rsC->Fetch()) {
-    ShowError("Компания не найдена");
-    require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php';
-    exit;
+// 1) Создаём (если нужно) тип инфоблока «lab»
+if (!CIBlockType::GetByID("lab")->Fetch()) {
+    CIBlockType::Add([
+        "ID" => "lab",
+        "SECTIONS" => "Y",
+        "IN_RSS" => "N",
+        "SORT" => 500,
+        "LANG" => [
+            "ru" => [
+                "NAME" => "Laboratory",
+                "SECTION_NAME" => "Разделы лаборатории",
+                "ELEMENT_NAME" => "Элементы лаборатории"
+            ]
+        ]
+    ]);
 }
-$APPLICATION->SetTitle("Подразделения «".htmlspecialcharsbx($company['NAME'])."»");
-?>
 
-<div id="companies" class="row">
-  <?php
-  // Для каждого подразделения берём ID и генерируем ссылку на application/index.php
-  $rsSubs = CIBlockSection::GetList(
-      ["SORT"=>"ASC"],
-      ["IBLOCK_ID"=>$iblockId,"SECTION_ID"=>$companyId,"ACTIVE"=>"Y"],
-      false,
-      ["ID","NAME","DESCRIPTION"]
-  );
-  while ($sub = $rsSubs->Fetch()):
-      $subId   = (int)$sub["ID"];
-      $name    = htmlspecialcharsbx($sub["NAME"]);
-      $desc    = nl2br(htmlspecialcharsbx($sub["DESCRIPTION"]));
-      // Ссылка на ваш application:
-      $link    = "/local/glab/application/index.php?block_id=".$subId;
-  ?>
-    <a class="item col-md" href="<?= $link ?>">
-      <div class="icon"
-           style="background-image:url('<?= $templateFolder ?>/img/company.png');"></div>
-      <div class="title"><?= $name ?></div>
-      <div class="text"><?= $desc ?></div>
-    </a>
-  <?php endwhile; ?>
-</div>
+// 2) Проверяем, нет ли уже инфоблока с кодом lab_orders
+$exists = IblockTable::getList([
+    'select' => ['ID'],
+    'filter' => ['=CODE' => 'lab_orders']
+])->fetch();
 
-<?php require_once $_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php'; ?>
+if ($exists) {
+    $iblockId = $exists['ID'];
+    echo "Инфоблок lab_orders уже существует (ID={$iblockId})\n";
+} else {
+    // 3) Добавляем инфоблок «Заявки лаборатории»
+    $ib = new CIBlock;
+    $id = $ib->Add([
+        'ACTIVE' => 'Y',
+        'NAME' => 'Заявки лаборатории',
+        'CODE' => 'lab_orders',
+        'IBLOCK_TYPE_ID' => 'lab',
+        'SITE_ID' => ['s1'],       // замените на код вашего сайта
+        'SORT' => 500,
+        'GROUP_ID' => [           // права: админы — полный доступ, все — создание
+            1 => 'X',
+            2 => 'W',
+        ],
+    ]);
+    if (!$id) {
+        die("Ошибка создания инфоблока: ".$ib->LAST_ERROR);
+    }
+    $iblockId = $id;
+    echo "Создан инфоблок lab_orders (ID={$iblockId})\n";
+
+    // 4) Добавляем свойства
+
+    $prop = new CIBlockProperty;
+
+    // USER_ID
+    $prop->Add([
+        'ACTIVE' => 'Y',
+        'IBLOCK_ID' => $iblockId,
+        'NAME' => 'Пользователь',
+        'CODE' => 'USER_ID',
+        'PROPERTY_TYPE' => 'N',  // числовое
+        'SORT' => 100,
+    ]);
+    echo "Добавлено свойство USER_ID\n";
+
+    // BLOCK_REF
+    $prop->Add([
+        'ACTIVE' => 'Y',
+        'IBLOCK_ID' => $iblockId,
+        'NAME' => 'Подразделение (SECTION_ID)',
+        'CODE' => 'BLOCK_REF',
+        'PROPERTY_TYPE' => 'N',
+        'SORT' => 200,
+    ]);
+    echo "Добавлено свойство BLOCK_REF\n";
+
+    // FULL_NAME
+    $prop->Add([
+        'ACTIVE' => 'Y',
+        'IBLOCK_ID' => $iblockId,
+        'NAME' => 'ФИО',
+        'CODE' => 'FULL_NAME',
+        'PROPERTY_TYPE' => 'S',  // строковое
+        'SORT' => 300,
+    ]);
+    echo "Добавлено свойство FULL_NAME\n";
+
+    // PHONE
+    $prop->Add([
+        'ACTIVE' => 'Y',
+        'IBLOCK_ID' => $iblockId,
+        'NAME' => 'Телефон',
+        'CODE' => 'PHONE',
+        'PROPERTY_TYPE' => 'S',
+        'SORT' => 400,
+    ]);
+    echo "Добавлено свойство PHONE\n";
+
+    // POSITION
+    $prop->Add([
+        'ACTIVE' => 'Y',
+        'IBLOCK_ID' => $iblockId,
+        'NAME' => 'Должность',
+        'CODE' => 'POSITION',
+        'PROPERTY_TYPE' => 'S',
+        'SORT' => 500,
+    ]);
+    echo "Добавлено свойство POSITION\n";
+
+    // TASK
+    $prop->Add([
+        'ACTIVE' => 'Y',
+        'IBLOCK_ID' => $iblockId,
+        'NAME' => 'Задача',
+        'CODE' => 'TASK',
+        'PROPERTY_TYPE' => 'S',
+        'MULTIPLE' => 'Y',
+        'SORT' => 600,
+    ]);
+    echo "Добавлено свойство TASK\n";
+
+    // NOTE
+    $prop->Add([
+        'ACTIVE' => 'Y',
+        'IBLOCK_ID' => $iblockId,
+        'NAME' => 'Примечание',
+        'CODE' => 'NOTE',
+        'PROPERTY_TYPE' => 'S',
+        'MULTIPLE' => 'Y',
+        'SORT' => 700,
+    ]);
+    echo "Добавлено свойство NOTE\n";
+
+    // STATUS - список
+    $statusPropId = $prop->Add([
+        'ACTIVE' => 'Y',
+        'IBLOCK_ID' => $iblockId,
+        'NAME' => 'Статус',
+        'CODE' => 'STATUS',
+        'PROPERTY_TYPE' => 'L',  // список
+        'SORT' => 800,
+    ]);
+    if ($statusPropId) {
+        $enum = new CIBlockPropertyEnum;
+        $enum->Add(['PROPERTY_ID' => $statusPropId, 'VALUE' => 'NEW',      'DEF' => 'Y']);
+        $enum->Add(['PROPERTY_ID' => $statusPropId, 'VALUE' => 'IN_PROGRESS']);
+        $enum->Add(['PROPERTY_ID' => $statusPropId, 'VALUE' => 'COMPLETED']);
+        echo "Добавлено свойство STATUS с вариантами\n";
+    } else {
+        echo "Ошибка создания свойства STATUS\n";
+    }
+}
+
+echo "Готово.\n";
 ```
 
-* Мы берём из `$sub["ID"]` именно тот `block_id`, который приложение ожидает в `$_GET['block_id']` .
-* Папка `glab/application` содержит свой `index.php`, который делает `require("../header.php")` и затем обрабатывает `block_id` для вывода формы .
+**Как пользоваться:**
 
-После этого клик по карточке подразделения приведёт пользователя в нужный раздел вашего «application».
+1. Сохраните этот код в файл, например `/local/tools/create_lab_orders_iblock.php`.
+2. Запустите в браузере:
+
+   ```
+   https://ваш-домен/local/tools/create_lab_orders_iblock.php
+   ```
+3. Проверьте результат в админке — должен появиться инфоблок **lab\_orders** с перечисленными свойствами.
+4. Удалите или закомментируйте скрипт после успешного выполнения, чтобы не создавать дубли.
