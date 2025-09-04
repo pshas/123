@@ -1,6 +1,15 @@
-Отлично 👍 Тогда давай сразу завернём это в **Bootstrap 5**, чтобы всё было адаптивно (на телефоне элементы будут красиво перестраиваться).
+Отлично, вижу твою структуру таблицы **cars\_feedback** 👌
 
-Я перепишу обе страницы (**survey.php** и **results.php**) с современным дизайном.
+У тебя такие поля:
+
+* **ID\_FEEDBACK** (PK)
+* **ID\_CAR** (FK)
+* **move\_time, clean, driver\_clean, driver\_tactic, move\_safety, move\_comfort, smell\_cabin, volume\_music, temperature\_cabin** → все `TINYINT(1)` (оценки 1–5)
+* **comment** (текст отзыва)
+* **comment\_date** (DATE)
+* **telephone** (номер телефона)
+
+Тогда адаптируем код.
 
 ---
 
@@ -8,7 +17,7 @@
 
 ```php
 <?php
-$pdo = new PDO("mysql:host=localhost;dbname=test;charset=utf8", "root", "");
+$pdo = new PDO("mysql:host=localhost;dbname=qr_opros;charset=utf8", "root", "");
 
 // Получаем список машин
 $cars = $pdo->query("SELECT * FROM cars")->fetchAll(PDO::FETCH_ASSOC);
@@ -16,16 +25,41 @@ $cars = $pdo->query("SELECT * FROM cars")->fetchAll(PDO::FETCH_ASSOC);
 // Обработка формы
 if ($_SERVER["REQUEST_METHOD"] === "POST") {
     $car_id = (int)$_POST['car_id'];
-    $comfort = (int)$_POST['comfort'];
-    $design = (int)$_POST['design'];
-    $price = (int)$_POST['price'];
+    $data = [
+        'move_time' => (int)$_POST['move_time'],
+        'clean' => (int)$_POST['clean'],
+        'driver_clean' => (int)$_POST['driver_clean'],
+        'driver_tactic' => (int)$_POST['driver_tactic'],
+        'move_safety' => (int)$_POST['move_safety'],
+        'move_comfort' => (int)$_POST['move_comfort'],
+        'smell_cabin' => (int)$_POST['smell_cabin'],
+        'volume_music' => (int)$_POST['volume_music'],
+        'temperature_cabin' => (int)$_POST['temperature_cabin'],
+    ];
     $comment = trim($_POST['comment']);
+    $telephone = trim($_POST['telephone']);
+    $date = date("Y-m-d");
 
     $stmt = $pdo->prepare("
-        INSERT INTO cars_feedback (car_id, rating_comfort, rating_design, rating_price, comment)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO cars_feedback 
+        (ID_CAR, move_time, clean, driver_clean, driver_tactic, move_safety, move_comfort, smell_cabin, volume_music, temperature_cabin, comment, comment_date, telephone)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
-    $stmt->execute([$car_id, $comfort, $design, $price, $comment]);
+    $stmt->execute([
+        $car_id,
+        $data['move_time'],
+        $data['clean'],
+        $data['driver_clean'],
+        $data['driver_tactic'],
+        $data['move_safety'],
+        $data['move_comfort'],
+        $data['smell_cabin'],
+        $data['volume_music'],
+        $data['temperature_cabin'],
+        $comment,
+        $date,
+        $telephone
+    ]);
 
     $success = true;
 }
@@ -40,7 +74,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 <body class="bg-light">
 <div class="container py-4">
     <div class="row justify-content-center">
-        <div class="col-lg-6 col-md-8 col-sm-12">
+        <div class="col-lg-7 col-md-9 col-sm-12">
             <div class="card shadow-sm">
                 <div class="card-body">
                     <h3 class="card-title text-center mb-4">Опрос по автомобилям</h3>
@@ -49,8 +83,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                         <div class="alert alert-success">Спасибо за отзыв!</div>
                     <?php endif; ?>
 
-                    <form method="post">
-                        <div class="mb-3">
+                    <form method="post" class="row g-3">
+                        <div class="col-12">
                             <label class="form-label">Выберите автомобиль</label>
                             <select name="car_id" class="form-select" required>
                                 <?php foreach ($cars as $car): ?>
@@ -61,27 +95,38 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
                             </select>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">Комфорт</label>
-                            <input type="range" class="form-range" name="comfort" min="1" max="5" required>
-                        </div>
+                        <?php 
+                        $criteria = [
+                            "move_time" => "Время поездки",
+                            "clean" => "Чистота салона",
+                            "driver_clean" => "Опрятность водителя",
+                            "driver_tactic" => "Манера вождения",
+                            "move_safety" => "Безопасность движения",
+                            "move_comfort" => "Комфорт поездки",
+                            "smell_cabin" => "Запах в салоне",
+                            "volume_music" => "Громкость музыки",
+                            "temperature_cabin" => "Температура в салоне"
+                        ];
+                        foreach ($criteria as $name => $label): ?>
+                            <div class="col-12">
+                                <label class="form-label"><?= $label ?></label>
+                                <input type="range" class="form-range" name="<?= $name ?>" min="1" max="5" required>
+                            </div>
+                        <?php endforeach; ?>
 
-                        <div class="mb-3">
-                            <label class="form-label">Дизайн</label>
-                            <input type="range" class="form-range" name="design" min="1" max="5" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Цена/качество</label>
-                            <input type="range" class="form-range" name="price" min="1" max="5" required>
-                        </div>
-
-                        <div class="mb-3">
+                        <div class="col-12">
                             <label class="form-label">Комментарий</label>
                             <textarea name="comment" class="form-control" rows="3" placeholder="Ваш отзыв..."></textarea>
                         </div>
 
-                        <button type="submit" class="btn btn-primary w-100">Отправить отзыв</button>
+                        <div class="col-12">
+                            <label class="form-label">Телефон (необязательно)</label>
+                            <input type="text" name="telephone" class="form-control" placeholder="+7...">
+                        </div>
+
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary w-100">Отправить отзыв</button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -94,13 +139,12 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
 ---
 
-## 📌 results.php (страница результатов)
+## 📌 results.php (результаты)
 
 ```php
 <?php
-$pdo = new PDO("mysql:host=localhost;dbname=test;charset=utf8", "root", "");
+$pdo = new PDO("mysql:host=localhost;dbname=qr_opros;charset=utf8", "root", "");
 
-// Получаем список машин
 $cars = $pdo->query("SELECT * FROM cars")->fetchAll(PDO::FETCH_ASSOC);
 
 $car_id = $_GET['car_id'] ?? null;
@@ -108,17 +152,23 @@ $feedback = [];
 $averages = [];
 
 if ($car_id) {
-    $stmt = $pdo->prepare("SELECT * FROM cars_feedback WHERE car_id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM cars_feedback WHERE ID_CAR = ?");
     $stmt->execute([$car_id]);
     $feedback = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $stmt = $pdo->prepare("
         SELECT 
-            AVG(rating_comfort) as avg_comfort,
-            AVG(rating_design) as avg_design,
-            AVG(rating_price) as avg_price
+            AVG(move_time) as avg_move_time,
+            AVG(clean) as avg_clean,
+            AVG(driver_clean) as avg_driver_clean,
+            AVG(driver_tactic) as avg_driver_tactic,
+            AVG(move_safety) as avg_move_safety,
+            AVG(move_comfort) as avg_move_comfort,
+            AVG(smell_cabin) as avg_smell_cabin,
+            AVG(volume_music) as avg_volume_music,
+            AVG(temperature_cabin) as avg_temperature_cabin
         FROM cars_feedback
-        WHERE car_id = ?
+        WHERE ID_CAR = ?
     ");
     $stmt->execute([$car_id]);
     $averages = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -156,21 +206,35 @@ if ($car_id) {
                     <table class="table table-striped table-hover">
                         <thead class="table-dark">
                         <tr>
+                            <th>Время</th>
+                            <th>Чистота</th>
+                            <th>Водитель</th>
+                            <th>Манера</th>
+                            <th>Безопасность</th>
                             <th>Комфорт</th>
-                            <th>Дизайн</th>
-                            <th>Цена/качество</th>
+                            <th>Запах</th>
+                            <th>Музыка</th>
+                            <th>Температура</th>
                             <th>Комментарий</th>
                             <th>Дата</th>
+                            <th>Телефон</th>
                         </tr>
                         </thead>
                         <tbody>
                         <?php foreach ($feedback as $row): ?>
                             <tr>
-                                <td><?= $row['rating_comfort'] ?></td>
-                                <td><?= $row['rating_design'] ?></td>
-                                <td><?= $row['rating_price'] ?></td>
+                                <td><?= $row['move_time'] ?></td>
+                                <td><?= $row['clean'] ?></td>
+                                <td><?= $row['driver_clean'] ?></td>
+                                <td><?= $row['driver_tactic'] ?></td>
+                                <td><?= $row['move_safety'] ?></td>
+                                <td><?= $row['move_comfort'] ?></td>
+                                <td><?= $row['smell_cabin'] ?></td>
+                                <td><?= $row['volume_music'] ?></td>
+                                <td><?= $row['temperature_cabin'] ?></td>
                                 <td><?= htmlspecialchars($row['comment']) ?></td>
-                                <td><?= $row['created_at'] ?></td>
+                                <td><?= $row['comment_date'] ?></td>
+                                <td><?= htmlspecialchars($row['telephone']) ?></td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>
@@ -178,26 +242,43 @@ if ($car_id) {
                 </div>
 
                 <h5 class="mt-4">Средние оценки</h5>
-                <canvas id="chart" height="150"></canvas>
+                <canvas id="chart" height="200"></canvas>
                 <script>
                     const ctx = document.getElementById('chart');
                     new Chart(ctx, {
-                        type: 'bar',
+                        type: 'radar',
                         data: {
-                            labels: ['Комфорт', 'Дизайн', 'Цена/качество'],
+                            labels: [
+                                'Время', 'Чистота', 'Опрятность водителя', 'Манера вождения',
+                                'Безопасность', 'Комфорт', 'Запах', 'Музыка', 'Температура'
+                            ],
                             datasets: [{
                                 label: 'Средняя оценка',
                                 data: [
-                                    <?= round($averages['avg_comfort'],2) ?>,
-                                    <?= round($averages['avg_design'],2) ?>,
-                                    <?= round($averages['avg_price'],2) ?>
+                                    <?= round($averages['avg_move_time'],2) ?>,
+                                    <?= round($averages['avg_clean'],2) ?>,
+                                    <?= round($averages['avg_driver_clean'],2) ?>,
+                                    <?= round($averages['avg_driver_tactic'],2) ?>,
+                                    <?= round($averages['avg_move_safety'],2) ?>,
+                                    <?= round($averages['avg_move_comfort'],2) ?>,
+                                    <?= round($averages['avg_smell_cabin'],2) ?>,
+                                    <?= round($averages['avg_volume_music'],2) ?>,
+                                    <?= round($averages['avg_temperature_cabin'],2) ?>
                                 ],
-                                backgroundColor: ['#0d6efd','#198754','#ffc107']
+                                backgroundColor: 'rgba(13,110,253,0.2)',
+                                borderColor: '#0d6efd',
+                                pointBackgroundColor: '#0d6efd'
                             }]
                         },
                         options: {
                             responsive: true,
-                            scales: { y: { min: 0, max: 5, ticks: { stepSize: 1 } } }
+                            scales: {
+                                r: {
+                                    min: 0,
+                                    max: 5,
+                                    ticks: { stepSize: 1 }
+                                }
+                            }
                         }
                     });
                 </script>
@@ -211,13 +292,11 @@ if ($car_id) {
 
 ---
 
-### 📱 Что улучшено для мобильных:
+Теперь:
 
-* Используется **Bootstrap grid** → элементы красиво центрируются.
-* Поля ввода — **range sliders** (удобно на телефоне).
-* Таблица с отзывами обернута в `table-responsive` → скролл на маленьких экранах.
-* Кнопки и поля формы занимают **100% ширины на мобилке**.
+* В **survey.php** добавлены все поля из таблицы.
+* В **results.php** выводятся отзывы в таблице и **радарная диаграмма** (наглядно для 9 критериев).
 
 ---
 
-Хочешь, я ещё добавлю **ссылку-переключатель** (например "Оставить отзыв / Смотреть результаты"), чтобы можно было легко переходить между `survey.php` и `results.php` без ввода URL?
+Хочешь, чтобы в форме **оценка отображалась цифрой рядом со слайдером** (например: "3/5") при перемещении?
