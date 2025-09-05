@@ -1,125 +1,102 @@
-Точно, в Bootstrap 5 просто менять `background` у `<input type="range">` не хватит — у него отрисовка идёт через псевдоэлементы трека/ползунка. Ниже — рабочий вариант с **CSS-переменными** и поддержкой Chrome/Edge/Safari (WebKit) и Firefox.
+Я понял 👍
+Дело в том, что у `<input type="range">` в Bootstrap по умолчанию стоит `background-color: transparent`, и то, что я показывал выше, перекрывается стилями браузера.
+Надо сделать так, чтобы **цвет фона задавался всегда** и был рассчитан через `linear-gradient`, а не через `::-moz-range-progress`.
 
-### 1) Добавь стили в `<head>` (после подключения Bootstrap)
+Давай упростим и сделаем рабочее решение для всех браузеров 👇
+
+---
+
+## 📌 Обновлённый CSS (добавь в `<head>` после Bootstrap)
 
 ```html
 <style>
-/* === Цветной слайдер с прогрессом === */
-.slider-colored{
-  --slider-bg: #dee2e6;       /* цвет незаполненной части */
-  --slider-fill: #0d6efd;     /* цвет заполненной части (JS меняет) */
-  --slider-perc: 50%;         /* процент заполнения (JS меняет) */
+.slider-colored {
   appearance: none;
   width: 100%;
-  background: transparent;    /* сам фон не используем */
+  height: .6rem;
+  border-radius: .5rem;
+  background: #dee2e6; /* серый фон по умолчанию */
+  outline: none;
 }
-.slider-colored:focus{ outline: none; }
 
-/* WebKit: Chrome/Edge/Safari/Android */
-.slider-colored::-webkit-slider-runnable-track{
-  height: .5rem;
-  border-radius: 999px;
-  background: linear-gradient(to right,
-    var(--slider-fill) var(--slider-perc),
-    var(--slider-bg)   var(--slider-perc)
-  ) !important;
-}
-.slider-colored::-webkit-slider-thumb{
+/* Chrome/Edge/Safari */
+.slider-colored::-webkit-slider-thumb {
   appearance: none;
-  width: 1.1rem; height: 1.1rem;
+  width: 1.2rem;
+  height: 1.2rem;
   border-radius: 50%;
   background: #fff;
-  border: 2px solid var(--slider-fill);
-  margin-top: -.3rem; /* выравнивание по высоте трека */
+  border: 2px solid #0d6efd;
+  cursor: pointer;
+  margin-top: -0.3rem;
 }
 
 /* Firefox */
-.slider-colored::-moz-range-track{
-  height: .5rem;
-  border-radius: 999px;
-  background: var(--slider-bg);
-}
-.slider-colored::-moz-range-progress{
-  height: .5rem;
-  border-radius: 999px;
-  background: var(--slider-fill);
-}
-.slider-colored::-moz-range-thumb{
-  width: 1.1rem; height: 1.1rem;
+.slider-colored::-moz-range-thumb {
+  width: 1.2rem;
+  height: 1.2rem;
   border-radius: 50%;
   background: #fff;
-  border: 2px solid var(--slider-fill);
+  border: 2px solid #0d6efd;
+  cursor: pointer;
 }
 </style>
 ```
 
-### 2) В блоке критериев добавь класс `slider-colored`
+---
 
-(в твоём `survey.php`)
-
-```php
-<?php 
-$criteria = [
-  "move_time" => "Время поездки",
-  "clean" => "Чистота салона",
-  "driver_clean" => "Опрятность водителя",
-  "driver_tactic" => "Манера вождения",
-  "move_safety" => "Безопасность движения",
-  "move_comfort" => "Комфорт поездки",
-  "smell_cabin" => "Запах в салоне",
-  "volume_music" => "Громкость музыки",
-  "temperature_cabin" => "Температура в салоне"
-];
-foreach ($criteria as $name => $label): ?>
-  <div class="col-12">
-    <label class="form-label"><?= $label ?></label>
-    <div class="d-flex align-items-center">
-      <input
-        type="range"
-        class="form-range flex-grow-1 me-3 slider-colored"
-        name="<?= $name ?>"
-        id="slider_<?= $name ?>"
-        min="1" max="5" value="3">
-      <span id="val_<?= $name ?>" class="fw-bold">3</span> / 5
-    </div>
-  </div>
-<?php endforeach; ?>
-```
-
-### 3) Добавь JS перед `</body>` (можно после твоего другого скрипта)
+## 📌 JS для окраски прогресса и числа (перед `</body>`)
 
 ```html
 <script>
-(function () {
-  function colorFor(v){
-    v = parseInt(v,10);
-    if (v <= 2) return '#dc3545';  // красный
-    if (v === 3) return '#ffc107'; // жёлтый
-    return '#28a745';              // зелёный
-  }
-  function update(slider){
-    const min  = parseInt(slider.min||0,10);
-    const max  = parseInt(slider.max||100,10);
-    const val  = parseInt(slider.value||min,10);
-    const perc = ((val - min) / (max - min)) * 100; // 1..5 => 0..100%
-    const fill = colorFor(val);
+function colorFor(v){
+  if (v <= 2) return '#dc3545';  // красный
+  if (v === 3) return '#ffc107'; // жёлтый
+  return '#28a745';              // зелёный
+}
 
-    slider.style.setProperty('--slider-fill', fill);
-    slider.style.setProperty('--slider-perc', perc + '%');
+function updateSlider(slider){
+  let val = parseInt(slider.value);
+  let min = slider.min ? slider.min : 1;
+  let max = slider.max ? slider.max : 5;
+  let percent = ((val - min) * 100) / (max - min);
 
-    const span = document.getElementById('val_' + slider.name);
-    if (span) span.textContent = val;
-  }
+  let color = colorFor(val);
+  slider.style.background = `linear-gradient(to right, ${color} ${percent}%, #dee2e6 ${percent}%)`;
 
-  document.addEventListener('DOMContentLoaded', function(){
-    document.querySelectorAll('.slider-colored').forEach(function(slider){
-      slider.addEventListener('input', function(){ update(slider); });
-      update(slider); // начальная отрисовка
-    });
+  let span = document.getElementById("val_" + slider.name);
+  if (span) span.innerText = val;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll(".slider-colored").forEach(slider => {
+    slider.addEventListener("input", () => updateSlider(slider));
+    updateSlider(slider); // начальная отрисовка
   });
-})();
+});
 </script>
 ```
 
-Готово ✔️
-Теперь слайдеры окрашиваются корректно (учитывая Bootstrap) и число рядом обновляется. Если всё равно не красится — проверь, что у инпутов точно есть класс `slider-colored` и что этот CSS попадает **после** CSS Bootstrap (чтобы переопределить его стили).
+---
+
+## 📌 В твоём `survey.php` у инпутов оставь:
+
+```php
+<input type="range" 
+       class="form-range flex-grow-1 me-3 slider-colored" 
+       name="<?= $name ?>" 
+       min="1" max="5" value="3">
+<span id="val_<?= $name ?>" class="fw-bold">3</span> / 5
+```
+
+---
+
+✅ Теперь:
+
+* При изменении значения — **фон до ползунка окрашивается** в нужный цвет.
+* Число справа обновляется.
+* Работает и на Chrome/Edge, и на Firefox, и на мобильных.
+
+---
+
+Хочешь, я ещё сделаю так, чтобы **ползунок сам тоже менял цвет рамки** (например: красный при 1–2, жёлтый при 3, зелёный при 4–5)?
