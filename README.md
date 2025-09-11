@@ -1,10 +1,16 @@
-<?php
+Понял 👍
+Для начала давай сделаем простой вывод списка заявок из инфоблока `lab_orders` (как у тебя в коде). В таблице будут колонки, которые ты перечислил, и последняя колонка **«Действие»** с кнопкой (ссылкой) на редактирование только если статус заявки `new`.
 
+Пример кода (файл `orders_list.php`):
+
+```php
+<?php
 require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/header.php');
 use Bitrix\Main\Loader;
 global $USER;
 
 Loader::includeModule('iblock');
+
 $iblockCode = 'lab_orders';
 $rsI = CIBlock::GetList([], ['CODE'=>$iblockCode,'ACTIVE'=>'Y']);
 if (!$ib = $rsI->Fetch()) {
@@ -14,92 +20,77 @@ if (!$ib = $rsI->Fetch()) {
 }
 $ordersIblockId = (int)$ib['ID'];
 
-$blockRef = isset($_GET['block_id']) ? (int)$_GET['block_id'] : 0;
+// Выборка элементов
+$arSelect = [
+    "ID", "NAME", "DATE_CREATE", "CREATED_BY", 
+    "PROPERTY_WORK_DEPARTMENT", "PROPERTY_DETAIL_NAME", "PROPERTY_DETAIL_NUMBER",
+    "PROPERTY_DATE_PRODUCTION", "PROPERTY_BATCH_NUMBER", "PROPERTY_NONCONFORMANCE",
+    "PROPERTY_STATUS"
+];
+$arFilter = ["IBLOCK_ID" => $ordersIblockId, "ACTIVE" => "Y"];
+$res = CIBlockElement::GetList(["DATE_CREATE" => "DESC"], $arFilter, false, false, $arSelect);
 
-$errors  = [];
-$success = false;
+// Таблица
+echo '<table border="1" cellpadding="5" cellspacing="0" style="margin:20px auto; border-collapse:collapse;">';
+echo '<tr>
+        <th>Номер</th>
+        <th>Создан</th>
+        <th>Инициатор</th>
+        <th>Цех/Отдел</th>
+        <th>Наименование детали</th>
+        <th>Номер детали</th>
+        <th>Дата изготовления</th>
+        <th>Номер партии</th>
+        <th>Несоответствие</th>
+        <th>Статус</th>
+        <th>Действие</th>
+      </tr>';
 
-if ($_SERVER['REQUEST_METHOD']==='POST' && check_bitrix_sessid()) {
-    // собираем значения из формы
-    $nameIzd       = trim($_POST['name_izd']        ?? '');
-    $idI           = trim($_POST['id_i']            ?? '');
-    $dateMan       = trim($_POST['date_man']        ?? '');
-    $country       = trim($_POST['country']         ?? '');
-    $countDetail   = trim($_POST['count_detail']    ?? '');
-    $dateDel       = trim($_POST['date_del']        ?? '');
-    $materials     = [];
-    if (!empty($_POST['material1'])) $materials[] = $_POST['material1'];
-    if (!empty($_POST['material2'])) $materials[] = $_POST['material2'];
-    if (!empty($_POST['material3'])) $materials[] = $_POST['material3'];
-    $processings   = [];
-    if (!empty($_POST['processing1'])) $processings[] = $_POST['processing1'];
-    if (!empty($_POST['processing2'])) $processings[] = $_POST['processing2'];
-
-    $dateDetail    = trim($_POST['date_detail']     ?? '');
-    $workDept      = trim($_POST['WORK_DEPARTMENT'] ?? '');
-    $fullName      = trim($_POST['full_name']       ?? '');
-    $phone         = trim($_POST['personal_phone']  ?? '');
-    $position      = trim($_POST['work_position']   ?? '');
-    $workPhone     = trim($_POST['work_phone']      ?? '');
-    $vin           = trim($_POST['VIN']             ?? '');
-    $task          = trim($_POST['task']            ?? '');
-    $note          = trim($_POST['note']            ?? '');
-    $accept        = trim($_POST['accept']          ?? '');
-    $handover      = trim($_POST['handover']        ?? '');
-
-    // простая валидация
-    if ($fullName === '' ) $errors[] = 'Укажите ФИО';
-    if ($phone    === '' ) $errors[] = 'Укажите телефон';
-    if ($nameIzd  === '' ) $errors[] = 'Укажите наименование изделия';
-
-    if (empty($errors)) {
-        $el = new CIBlockElement;
-
-        $fields = [
-            'IBLOCK_ID'         => $ordersIblockId,
-            'NAME'              => $nameIzd, // имя элемента = название изделия
-            'ACTIVE'            => 'Y',
-            'IBLOCK_SECTION_ID' => $blockRef,
-            'PROPERTY_VALUES'   => [
-                'USER_ID'       => $USER->GetID(),
-                'BLOCK_REF'     => $blockRef,
-                'NAME_IZD'      => $nameIzd,
-                'ID_I'          => $idI,
-                'DATE_MAN'      => $dateMan,
-                'COUNTRY'       => $country,
-                'COUNT_DETAIL'  => $countDetail,
-                'DATE_DEL'      => $dateDel,
-                'MATERIALS'     => $materials,
-                'PROCESSINGS'   => $processings,
-                'DATE_DETAIL'   => $dateDetail,
-                'WORK_DEPARTMENT' => $workDept,
-                'FULL_NAME'     => $fullName,
-                'PHONE'         => $phone,
-                'POSITION'      => $position,
-                'WORK_PHONE'    => $workPhone,
-                'VIN'           => $vin,
-                'TASK'          => $task,
-                'NOTE'          => $note,
-                'ACCEPT'        => $accept,
-                'HANDOVER'      => $handover,
-                'STATUS'        => 'NEW',
-            ],
-        ];
-
-        if ($newId = $el->Add($fields)) {
-            $success = true;
-        } else {
-            $errors[] = 'Ошибка сохранения: '.$el->LAST_ERROR;
+while ($arItem = $res->GetNext()) {
+    // Получаем имя инициатора
+    $initiator = '';
+    if ($arItem['CREATED_BY']) {
+        $rsUser = CUser::GetByID($arItem['CREATED_BY']);
+        if ($arUser = $rsUser->Fetch()) {
+            $initiator = $arUser['LAST_NAME'].' '.$arUser['NAME'];
         }
     }
+
+    $status = $arItem['PROPERTY_STATUS_VALUE'];
+    $actionBtn = '';
+    if ($status === 'new') {
+        $actionBtn = '<a href="/lab_orders/edit.php?id='.$arItem['ID'].'">Редактировать</a>';
+    }
+
+    echo '<tr>
+            <td>'.$arItem['ID'].'</td>
+            <td>'.$arItem['DATE_CREATE'].'</td>
+            <td>'.$initiator.'</td>
+            <td>'.$arItem['PROPERTY_WORK_DEPARTMENT_VALUE'].'</td>
+            <td>'.$arItem['PROPERTY_DETAIL_NAME_VALUE'].'</td>
+            <td>'.$arItem['PROPERTY_DETAIL_NUMBER_VALUE'].'</td>
+            <td>'.$arItem['PROPERTY_DATE_PRODUCTION_VALUE'].'</td>
+            <td>'.$arItem['PROPERTY_BATCH_NUMBER_VALUE'].'</td>
+            <td>'.$arItem['PROPERTY_NONCONFORMANCE_VALUE'].'</td>
+            <td>'.$status.'</td>
+            <td>'.$actionBtn.'</td>
+          </tr>';
 }
 
-if ($success): ?>
-    <div class="ok">Ваша заявка успешно сохранена. №<?= $newId ?></div>
-<?php elseif ($errors): ?>
-    <div class="errors">
-      <?php foreach($errors as $e): ?>
-        <p style="color:red"><?= htmlspecialcharsbx($e) ?></p>
-      <?php endforeach; ?>
-    </div>
-<?php endif; ?>
+echo '</table>';
+
+require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php');
+```
+
+---
+
+🔹 Что сделано:
+
+* Вытаскиваем все заявки из инфоблока `lab_orders`.
+* Выводим таблицу с колонками, которые ты перечислил.
+* В колонке «Действие» выводим ссылку **Редактировать** только если `status = new`.
+* Ссылка ведёт на `/lab_orders/edit.php?id=XXX`.
+
+---
+
+Хочешь, я сразу подготовлю и пример файла `edit.php`, где можно будет редактировать сохранённую заявку?
