@@ -1,14 +1,3 @@
-Окей 👍
-Тогда давай сделаем минимальный `edit.php`, который:
-
-1. Получает заявку по `ID`.
-2. Проверяет, что у неё статус `new`.
-3. Отображает форму с полями.
-4. Позволяет сохранить изменения.
-
-Пример `edit.php`:
-
-```php
 <?php
 require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/header.php');
 use Bitrix\Main\Loader;
@@ -34,18 +23,15 @@ if (!$elementId) {
 }
 
 // Загружаем заявку
-$arSelect = ["ID","NAME","DATE_CREATE","CREATED_BY","PROPERTY_*"];
-$arFilter = ["IBLOCK_ID"=>$ordersIblockId,"ID"=>$elementId];
-$res = CIBlockElement::GetList([], $arFilter, false, false, $arSelect);
-
-if (!($arItem = $res->GetNextElement())) {
+$res = CIBlockElement::GetList([], ["IBLOCK_ID"=>$ordersIblockId,"ID"=>$elementId], false, false);
+if (!($obElement = $res->GetNextElement())) {
     ShowError("Заявка не найдена");
     require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php');
     exit;
 }
 
-$fields = $arItem->GetFields();
-$props  = $arItem->GetProperties();
+$fields = $obElement->GetFields();     // стандартные поля
+$props  = $obElement->GetProperties(); // все свойства инфоблока
 
 $status = $props['STATUS']['VALUE'];
 if ($status !== 'new') {
@@ -72,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && check_bitrix_sessid()) {
         "MODIFIED_BY"    => $USER->GetID(),
         "IBLOCK_ID"      => $ordersIblockId,
         "PROPERTY_VALUES"=> $PROP,
-        "NAME"           => $_POST['detail_name'], // можно скорректировать
+        "NAME"           => $_POST['detail_name'], 
     ];
 
     if ($el->Update($elementId, $arLoad)) {
@@ -104,17 +90,3 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && check_bitrix_sessid()) {
 
 <?php
 require_once($_SERVER['DOCUMENT_ROOT'].'/bitrix/footer.php');
-```
-
----
-
-📌 Что сделано:
-
-* Вытягивает заявку по `id`.
-* Если статус не `new`, блокирует редактирование.
-* Отображает форму с заполненными полями.
-* После сохранения обновляет заявку и возвращает к списку.
-
----
-
-Хочешь, я ещё сделаю красивую таблицу/форму с CSS, чтобы она выглядела аккуратно (например, как в административной части)?
