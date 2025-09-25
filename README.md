@@ -1,49 +1,36 @@
-Лови лёгкий «троллинг» для `input[name="s"]`: при наведении (или попытке кликнуть/тапнуть) поле уезжает в случайное место экрана 😈
-Вставь этот скрипт в конец страницы перед `</body>`.
+<?php
+use Bitrix\Main\Mail\Mail;
 
-```html
-<script>
-(function () {
-  const el = document.querySelector('input[name="s"]');
-  if (!el) return;
+require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 
-  // Отрываем поле от верстки и катаем по экрану
-  el.style.position = 'fixed';
-  el.style.top = '0';
-  el.style.left = '0';
-  el.style.zIndex = '9999';
-  el.style.transition = 'transform 0.15s ease'; // для плавности
+// Тема письма
+$subject = "Тестовое письмо из Битрикс24";
 
-  let w = el.offsetWidth, h = el.offsetHeight;
+// Кому отправляем
+$to = "user@example.com";
 
-  function move() {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const pad = 8; // небольшой отступ от краёв
-    const maxX = Math.max(pad, vw - w - pad);
-    const maxY = Math.max(pad, vh - h - pad);
+// Тело письма (можно HTML)
+$message = "
+    <h2>Привет!</h2>
+    <p>Это тестовое письмо, отправленное из Битрикс24 через Mail::send().</p>
+";
 
-    const x = Math.random() * (maxX - pad) + pad;
-    const y = Math.random() * (maxY - pad) + pad;
+// Отправка письма
+$result = Mail::send([
+    'TO' => $to,
+    'SUBJECT' => $subject,
+    'BODY' => $message,
+    'HEADER' => [
+        'From' => 'no-reply@your-domain.ru'
+    ],
+    'CHARSET' => 'UTF-8',
+    'CONTENT_TYPE' => 'html', // или 'text'
+    'MESSAGE_ID' => uniqid('', true),
+    'SITE_ID' => SITE_ID,
+]);
 
-    el.style.transform = `translate(${x}px, ${y}px)`;
-  }
-
-  // Уезжает при наведении, фокусе, клике/тапе
-  el.addEventListener('pointerenter', move);
-  el.addEventListener('focus', move);
-  el.addEventListener('pointerdown', move, { passive: true });
-
-  // Обновляем размеры при ресайзе
-  window.addEventListener('resize', () => {
-    w = el.offsetWidth;
-    h = el.offsetHeight;
-  });
-
-  // Стартовая позиция, чтобы не мешал верстке
-  move();
-})();
-</script>
-```
-
-Если нужно держать поле внутри конкретного блока, скажи — дам версию, которая ездит только в пределах контейнера.
+if ($result) {
+    echo "Письмо отправлено!";
+} else {
+    echo "Ошибка при отправке письма.";
+}
