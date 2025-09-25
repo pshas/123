@@ -1,36 +1,21 @@
 <?php
-use Bitrix\Main\Mail\Mail;
+$dsn = 'mysql:host=localhost;dbname=qr_opros';
+$username = 'root';
+$password = 'root';
 
-require($_SERVER['DOCUMENT_ROOT'].'/bitrix/modules/main/include/prolog_before.php');
 
-// Тема письма
-$subject = "Тестовое письмо из Битрикс24";
 
-// Кому отправляем
-$to = "user@example.com";
+$pdo = new PDO($dsn, $username, $password);
+$nameCar = $_POST['nameCar'];
+$typeCar = $_POST['typeCar'];
+$nomCar = $_POST['nomCar'];
 
-// Тело письма (можно HTML)
-$message = "
-    <h2>Привет!</h2>
-    <p>Это тестовое письмо, отправленное из Битрикс24 через Mail::send().</p>
-";
 
-// Отправка письма
-$result = Mail::send([
-    'TO' => $to,
-    'SUBJECT' => $subject,
-    'BODY' => $message,
-    'HEADER' => [
-        'From' => 'no-reply@your-domain.ru'
-    ],
-    'CHARSET' => 'UTF-8',
-    'CONTENT_TYPE' => 'html', // или 'text'
-    'MESSAGE_ID' => uniqid('', true),
-    'SITE_ID' => SITE_ID,
-]);
+$sql = "INSERT INTO cars (NAME_CAR, TYPE_CAR, NOM_CAR) VALUES (?, ?, ?)";
+$stmt = $pdo->prepare($sql);
+$stmt->execute([$nameCar, $typeCar, $nomCar]);
 
-if ($result) {
-    echo "Письмо отправлено!";
-} else {
-    echo "Ошибка при отправке письма.";
-}
+$carId = $pdo->lastInsertId();
+echo json_encode(['id' => $carId, 'nameCar' => $nameCar, 'typeCar' => $typeCar, 'nomCar' => $nomCar]);
+
+?>
