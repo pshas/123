@@ -1,21 +1,3 @@
-<?php
-$dsn = 'mysql:host=localhost;dbname=qr_opros';
-$username = 'root';
-$password = 'root';
+Готово! Я создал одностраничный калькулятор: открой его на холсте справа. Там можно задать сумму, годовую ставку, срок в днях, ежедневные пополнения и (при необходимости) налог — расчёт идёт с ежедневной капитализацией. Есть сводка итогов и опциональная разбивка (дневная до 400 дней или помесячная для больших сроков).
 
-
-
-$pdo = new PDO($dsn, $username, $password);
-$nameCar = $_POST['nameCar'];
-$typeCar = $_POST['typeCar'];
-$nomCar = $_POST['nomCar'];
-
-
-$sql = "INSERT INTO cars (NAME_CAR, TYPE_CAR, NOM_CAR) VALUES (?, ?, ?)";
-$stmt = $pdo->prepare($sql);
-$stmt->execute([$nameCar, $typeCar, $nomCar]);
-
-$carId = $pdo->lastInsertId();
-echo json_encode(['id' => $carId, 'nameCar' => $nameCar, 'typeCar' => $typeCar, 'nomCar' => $nomCar]);
-
-?>
+Если нужно: добавлю валюты, экспорт в CSV/Excel, выбор конкретных дат с учётом високосного года, или формулу налога под ваш регион.
