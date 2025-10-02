@@ -1,27 +1,38 @@
 <?php
-$host = "localhost";   // или IP сервера
-$port = "5432";        // порт Postgres Pro
-$dbname = "sitemanager"; // имя базы
-$user = "bitrix";      // логин
-$password = "supersecret"; // пароль
+$dsn = "pgsql:host=localhost;port=5432;dbname=sitemanager;";
+$user = "bitrix";
+$pass = "supersecret";
 
 try {
-    // Формируем DSN
-    $dsn = "pgsql:host=$host;port=$port;dbname=$dbname;";
-    
-    // Создаем подключение
-    $pdo = new PDO($dsn, $user, $password, [
+    $pdo = new PDO($dsn, $user, $pass, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_NUM,
     ]);
 
-    echo "<h3>✅ Подключение успешно!</h3>";
+    // Базовые версии PostgreSQL
+    [$serverVersion] = $pdo->query("SHOW server_version")->fetch();
+    [$serverVersionNum] = $pdo->query("SHOW server_version_num")->fetch();
 
-    // Проверим версию Postgres Pro
-    $stmt = $pdo->query("SELECT version() AS ver;");
-    $row = $stmt->fetch();
-    echo "Версия сервера БД: " . htmlspecialchars($row['ver']) . "<br>";
+    // Параметры Postgres Pro (возвращают NULL, если это не Pro)
+    [$pgproVersion] = $pdo->query("SELECT current_setting('pgpro_version', true)")->fetch();
+    [$pgproEdition] = $pdo->query("SELECT current_setting('pgpro_edition', true)")->fetch();
+    [$pgproBuild]   = $pdo->query("SELECT current_setting('pgpro_build',   true)")->fetch();
+
+    // Фолбэк: текстовая строка version()
+    [$verString] = $pdo->query("SELECT version()")->fetch();
+
+    $isPro = !empty($pgproVersion) || !empty($pgproEdition);
+
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "server_version:      {$serverVersion}\n";
+    echo "server_version_num:  {$serverVersionNum}\n";
+    echo "pgpro_version:       " . ($pgproVersion ?: "NULL") . "\n";
+    echo "pgpro_edition:       " . ($pgproEdition ?: "NULL") . "\n";
+    echo "pgpro_build:         " . ($pgproBuild   ?: "NULL") . "\n";
+    echo "version():           {$verString}\n";
+    echo "Detected:            " . ($isPro ? "Postgres Pro ({$pgproEdition})" : "vanilla PostgreSQL") . "\n";
 
 } catch (PDOException $e) {
-    echo "<h3>❌ Ошибка подключения:</h3> " . htmlspecialchars($e->getMessage());
+    http_response_code(500);
+    echo "DB error: " . $e->getMessage();
 }
