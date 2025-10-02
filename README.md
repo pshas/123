@@ -1,41 +1,30 @@
 <?php
-require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
-
-use Bitrix\Main\Application;
-
-$connection = Application::getConnection();
-
-// базовая инфа о соединении
-$config = $connection->getConfiguration();
-
-echo "<h3>🔑 Данные подключения к БД:</h3>";
-echo "Тип: " . htmlspecialchars($connection->getType()) . "<br>";
-echo "Хост: " . htmlspecialchars($config['host']) . "<br>";
-echo "База: " . htmlspecialchars($config['database']) . "<br>";
-echo "Логин: " . htmlspecialchars($config['login']) . "<br>";
-echo "Пароль: " . htmlspecialchars($config['password']) . "<br><br>";
+$host = "localhost";
+$port = "3306";
+$dbname = "testdb";
+$user = "root";
+$password = "root";
 
 try {
-    // запрос версии PostgreSQL/Postgres Pro
-    $res = $connection->query("SELECT version() AS ver")->fetch();
-    echo "<h3>✅ Соединение успешно!</h3>";
-    echo "Версия сервера БД: " . htmlspecialchars($res['ver']) . "<br>";
+    // DSN (Data Source Name)
+    $dsn = "mysql:host=$host;port=$port;dbname=$dbname;charset=utf8mb4";
 
-    // попробуем вытащить параметры Postgres Pro (если есть)
-    $res2 = $connection->query("
-        SELECT 
-            current_setting('pgpro_version', true) AS pgpro_version,
-            current_setting('pgpro_edition', true) AS pgpro_edition
-    ")->fetch();
+    // Подключение
+    $pdo = new PDO($dsn, $user, $password, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION, // ошибки как исключения
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,       // fetch возвращает ассоц.массив
+        PDO::ATTR_EMULATE_PREPARES   => false,                  // нативные prepared statements
+    ]);
 
-    if (!empty($res2['pgpro_version']) || !empty($res2['pgpro_edition'])) {
-        echo "Postgres Pro edition: " . htmlspecialchars($res2['pgpro_edition']) . "<br>";
-        echo "Postgres Pro version: " . htmlspecialchars($res2['pgpro_version']) . "<br>";
-    } else {
-        echo "Скорее всего это обычный PostgreSQL (pgpro_* параметры отсутствуют).<br>";
-    }
+    echo "✅ Подключение к MySQL успешно<br>";
 
-} catch (\Exception $e) {
-    echo "<h3>❌ Ошибка подключения:</h3>";
-    echo htmlspecialchars($e->getMessage());
+    // Проверим версию сервера
+    $stmt = $pdo->query("SELECT VERSION() AS ver");
+    $row = $stmt->fetch();
+    echo "Версия MySQL: " . htmlspecialchars($row['ver']) . "<br>";
+
+} catch (PDOException $e) {
+    echo "❌ Ошибка подключения: " . $e->getMessage() . "<br>";
+    echo "Код ошибки: " . $e->getCode() . "<br>";
+    echo "<pre>" . $e->getTraceAsString() . "</pre>";
 }
