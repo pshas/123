@@ -1,195 +1,177 @@
-Отлично 👍
-Вот пример, как можно **переписать ваш код под PostgreSQL с использованием встроенного ORM Bitrix**, без ручного PDO-подключения.
+Отлично ✅
+Тогда давай просто **переделаем SQL-запросы с MySQL на PostgreSQL**, без Bitrix-ORM и без лишней абстракции.
+Я покажу именно те изменения, которые нужно внести, чтобы код на PHP/PDO, работавший с MySQL, стал корректно работать с PostgreSQL.
 
 ---
 
-## 📁 Файл `add_block.php` (добавление записи в таблицу `cars`)
+## 🔧 1. Подключение (PDO)
+
+### Было (MySQL)
 
 ```php
-<?php
-use Bitrix\Main\Loader;
-use Bitrix\Main\Application;
-use Bitrix\Main\Entity;
-
-// Подключаем ядро Bitrix
-require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
-Loader::includeModule("main");
-
-// === ОПИСАНИЕ ORM СУЩНОСТИ ===
-class CarTable extends Entity\DataManager
-{
-    public static function getTableName()
-    {
-        return 'cars';
-    }
-
-    public static function getMap()
-    {
-        return [
-            new Entity\IntegerField('ID_CAR', [
-                'primary' => true,
-                'autocomplete' => true
-            ]),
-            new Entity\StringField('NAME_CAR'),
-            new Entity\StringField('TYPE_CAR'),
-            new Entity\StringField('NOM_CAR'),
-        ];
-    }
-}
-
-// === ДОБАВЛЕНИЕ ЗАПИСИ ===
-$request = Application::getInstance()->getContext()->getRequest();
-
-$nameCar = $request->getPost("name_car");
-$typeCar = $request->getPost("type_car");
-$nomCar  = $request->getPost("nom_car");
-
-if ($nameCar && $typeCar && $nomCar)
-{
-    $result = CarTable::add([
-        'NAME_CAR' => $nameCar,
-        'TYPE_CAR' => $typeCar,
-        'NOM_CAR'  => $nomCar
-    ]);
-
-    if ($result->isSuccess())
-    {
-        $newId = $result->getId();
-        echo json_encode(['success' => true, 'id' => $newId]);
-    }
-    else
-    {
-        echo json_encode(['success' => false, 'errors' => $result->getErrorMessages()]);
-    }
-}
-else
-{
-    echo json_encode(['success' => false, 'error' => 'Missing fields']);
-}
+$pdo = new PDO(
+    "mysql:host=localhost;dbname=mydb;charset=utf8",
+    "user",
+    "pass",
+    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+);
 ```
 
----
-
-## 📁 Файл `prepare.php` (обновление флага `POLL_CREATED`)
+### Стало (PostgreSQL)
 
 ```php
-<?php
-use Bitrix\Main\Application;
-use Bitrix\Main\Loader;
-
-require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
-Loader::includeModule("main");
-
-$connection = Application::getConnection();
-$sqlHelper  = $connection->getSqlHelper();
-
-$carId = (int)$_POST['car_id'];
-
-if ($carId > 0)
-{
-    $connection->queryExecute("
-        UPDATE cars
-        SET poll_created = TRUE
-        WHERE id_car = {$carId}
-    ");
-    echo json_encode(['success' => true]);
-}
-else
-{
-    echo json_encode(['success' => false, 'error' => 'Invalid car_id']);
-}
+$pdo = new PDO(
+    "pgsql:host=localhost;port=5432;dbname=mydb",
+    "user",
+    "pass",
+    [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false
+    ]
+);
+$pdo->exec("SET client_encoding TO 'UTF8'");
 ```
 
+> ⚠️ В `pgsql` нельзя указывать `charset` в DSN — только через `SET client_encoding`.
+
 ---
 
-## 📁 Файл `load_blocks.php` (чтение списка машин)
+## 📄 2. `add_block.php`
+
+### Было (MySQL)
 
 ```php
-<?php
-use Bitrix\Main\Loader;
-use Bitrix\Main\Application;
+$stmt = $pdo->prepare("INSERT INTO cars (name_car, type_car, nom_car) VALUES (?, ?, ?)");
+$stmt->execute([$nameCar, $typeCar, $nomCar]);
+$carId = $pdo->lastInsertId();
+```
 
-require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
-Loader::includeModule("main");
+### Стало (PostgreSQL)
 
-$connection = Application::getConnection();
-
-$result = $connection->query("
-    SELECT id_car, name_car, type_car, nom_car
-    FROM cars
-    ORDER BY id_car DESC
+```php
+$stmt = $pdo->prepare("
+    INSERT INTO cars (name_car, type_car, nom_car)
+    VALUES (:name, :type, :nom)
+    RETURNING id_car
 ");
-
-$data = [];
-while ($row = $result->fetch())
-{
-    $data[] = $row;
-}
-
-echo json_encode($data);
+$stmt->execute([
+    ':name' => $nameCar,
+    ':type' => $typeCar,
+    ':nom'  => $nomCar
+]);
+$carId = (int)$stmt->fetchColumn();
 ```
+
+> PostgreSQL не поддерживает `lastInsertId()` без указания sequence.
+> Используем `RETURNING id_car`, чтобы сразу получить ID.
 
 ---
 
-## 📁 Файл `remove_block.php` (удаление записи)
+## 📄 3. `prepare.php`
+
+### Было (MySQL)
+
+```php
+$stmt = $pdo->prepare("UPDATE cars SET poll_created = 1 WHERE id_car = ?");
+$stmt->execute([$carId]);
+```
+
+### Стало (PostgreSQL)
+
+```php
+$stmt = $pdo->prepare("UPDATE cars SET poll_created = TRUE WHERE id_car = :id");
+$stmt->execute([':id' => $carId]);
+```
+
+> Булевые значения в PostgreSQL — `TRUE/FALSE`, не `1/0`.
+
+---
+
+## 📄 4. `load_blocks.php`
+
+### Было (MySQL)
+
+```php
+$stmt = $pdo->query("SELECT id_car, name_car, type_car, nom_car FROM cars ORDER BY id_car DESC");
+$rows = $stmt->fetchAll();
+```
+
+### Стало (PostgreSQL)
+
+```php
+$stmt = $pdo->query("SELECT id_car, name_car, type_car, nom_car FROM cars ORDER BY id_car DESC");
+$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+```
+
+> Тут изменений почти нет — SQL-синтаксис совпадает.
+
+---
+
+## 📄 5. `remove_block.php`
+
+### Было (MySQL)
+
+```php
+$stmt = $pdo->prepare("DELETE FROM cars WHERE id_car = ?");
+$stmt->execute([$id]);
+```
+
+### Стало (PostgreSQL)
+
+```php
+$stmt = $pdo->prepare("DELETE FROM cars WHERE id_car = :id");
+$stmt->execute([':id' => $id]);
+```
+
+> Формально одинаково, просто для единообразия можно использовать именованные параметры.
+
+---
+
+## 🧱 6. Частые отличия MySQL → PostgreSQL
+
+| Особенность        | MySQL                | PostgreSQL                               |   |    |
+| ------------------ | -------------------- | ---------------------------------------- | - | -- |
+| Булевый тип        | `TINYINT(1)` с `0/1` | `BOOLEAN` с `TRUE/FALSE`                 |   |    |
+| Автоинкремент      | `AUTO_INCREMENT`     | `SERIAL` или `GENERATED ... AS IDENTITY` |   |    |
+| NOW()              | ✅                    | ✅                                        |   |    |
+| LIMIT              | `LIMIT offset,count` | `LIMIT count OFFSET offset`              |   |    |
+| Конкатенация строк | `CONCAT(a,b)`        | `a                                       |   | b` |
+| Escape ``` кавычки | ``` (бэктик)         | `"` (двойные кавычки)                    |   |    |
+
+---
+
+## ✅ Пример полностью работающего `add_block.php` под PostgreSQL
 
 ```php
 <?php
-use Bitrix\Main\Application;
-use Bitrix\Main\Loader;
+$pdo = new PDO(
+    "pgsql:host=localhost;port=5432;dbname=mydb",
+    "user",
+    "pass",
+    [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false
+    ]
+);
+$pdo->exec("SET client_encoding TO 'UTF8'");
 
-require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
-Loader::includeModule("main");
+$nameCar = $_POST['name_car'] ?? '';
+$typeCar = $_POST['type_car'] ?? '';
+$nomCar  = $_POST['nom_car'] ?? '';
 
-$connection = Application::getConnection();
-$carId = (int)$_POST['id_car'];
+$stmt = $pdo->prepare("
+    INSERT INTO cars (name_car, type_car, nom_car)
+    VALUES (:name, :type, :nom)
+    RETURNING id_car
+");
+$stmt->execute([':name' => $nameCar, ':type' => $typeCar, ':nom' => $nomCar]);
+$id = (int)$stmt->fetchColumn();
 
-if ($carId > 0)
-{
-    $connection->queryExecute("DELETE FROM cars WHERE id_car = {$carId}");
-    echo json_encode(['success' => true]);
-}
-else
-{
-    echo json_encode(['success' => false, 'error' => 'Invalid car_id']);
-}
+echo json_encode(['success' => true, 'id' => $id]);
 ```
 
 ---
 
-## ⚙️ Что нужно ещё сделать
-
-1. **В `/bitrix/.settings.php`**:
-
-   ```php
-   'connections' => [
-       'value' => [
-           'default' => [
-               'className' => '\\Bitrix\\Main\\DB\\PgsqlConnection',
-               'host' => 'localhost',
-               'database' => 'mydb',
-               'login' => 'myuser',
-               'password' => 'mypassword',
-               'options' => 2,
-           ],
-       ],
-   ],
-   ```
-
-2. **В базе PostgreSQL**:
-   Убедитесь, что таблица `cars` создана правильно:
-
-   ```sql
-   CREATE TABLE cars (
-       id_car SERIAL PRIMARY KEY,
-       name_car VARCHAR(255),
-       type_car VARCHAR(255),
-       nom_car  VARCHAR(255),
-       poll_created BOOLEAN DEFAULT FALSE
-   );
-   ```
-
----
-
-Если хочешь, я могу подготовить diff-патч (`.patch` файл), который можно применить напрямую к репозиторию на GitHub — всё будет уже готово к PostgreSQL и Bitrix ORM.
-Сделать такой патч?
+Хочешь, я пройдусь по всем твоим файлам из репозитория `github.com/pshas/2134` и выдам готовую diff-версию (`.patch`) с переводом всех запросов на PostgreSQL (чтобы можно было просто применить)?
