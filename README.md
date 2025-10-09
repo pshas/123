@@ -1,115 +1,195 @@
-Отлично 💪
-Вот **пошаговая и безопасная инструкция**, как создать **новую схему в БД Битрикс** и разместить там свои таблицы (`cars`, `feedback`), не задевая систему.
+Отлично 👍
+Вот пример, как можно **переписать ваш код под PostgreSQL с использованием встроенного ORM Bitrix**, без ручного PDO-подключения.
 
 ---
 
-## 🚀 1. Подключись к базе данных Битрикс
+## 📁 Файл `add_block.php` (добавление записи в таблицу `cars`)
 
-В pgAdmin 4:
+```php
+<?php
+use Bitrix\Main\Loader;
+use Bitrix\Main\Application;
+use Bitrix\Main\Entity;
 
-* Найди подключение к серверу, где находится база Битрикс.
-* Разверни дерево и выбери **нужную базу данных** (например, `bitrix` или `site_db` — зависит от установки).
-* Открой **Query Tool** (инструмент запросов).
+// Подключаем ядро Bitrix
+require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
+Loader::includeModule("main");
 
----
+// === ОПИСАНИЕ ORM СУЩНОСТИ ===
+class CarTable extends Entity\DataManager
+{
+    public static function getTableName()
+    {
+        return 'cars';
+    }
 
-## 🧩 2. Создай отдельную схему для своих таблиц
+    public static function getMap()
+    {
+        return [
+            new Entity\IntegerField('ID_CAR', [
+                'primary' => true,
+                'autocomplete' => true
+            ]),
+            new Entity\StringField('NAME_CAR'),
+            new Entity\StringField('TYPE_CAR'),
+            new Entity\StringField('NOM_CAR'),
+        ];
+    }
+}
 
-Выполни SQL:
+// === ДОБАВЛЕНИЕ ЗАПИСИ ===
+$request = Application::getInstance()->getContext()->getRequest();
 
-```sql
-CREATE SCHEMA qr_schema AUTHORIZATION postgres;
+$nameCar = $request->getPost("name_car");
+$typeCar = $request->getPost("type_car");
+$nomCar  = $request->getPost("nom_car");
+
+if ($nameCar && $typeCar && $nomCar)
+{
+    $result = CarTable::add([
+        'NAME_CAR' => $nameCar,
+        'TYPE_CAR' => $typeCar,
+        'NOM_CAR'  => $nomCar
+    ]);
+
+    if ($result->isSuccess())
+    {
+        $newId = $result->getId();
+        echo json_encode(['success' => true, 'id' => $newId]);
+    }
+    else
+    {
+        echo json_encode(['success' => false, 'errors' => $result->getErrorMessages()]);
+    }
+}
+else
+{
+    echo json_encode(['success' => false, 'error' => 'Missing fields']);
+}
 ```
 
-> 🔹 Если у Битрикс свой пользователь (например, `bitrix`), лучше использовать:
->
-> ```sql
-> CREATE SCHEMA qr_schema AUTHORIZATION bitrix;
-> ```
-
-Теперь у тебя появится новая “папка” (`qr_schema`) внутри базы, изолированная от `public`.
-
 ---
 
-## 🛠️ 3. Создай таблицы в новой схеме
+## 📁 Файл `prepare.php` (обновление флага `POLL_CREATED`)
 
-Вот твои таблицы из предыдущих примеров, адаптированные под новую схему:
+```php
+<?php
+use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 
-```sql
--- Таблица автомобилей
-CREATE TABLE qr_schema.cars (
-    id_car SERIAL PRIMARY KEY,
-    name_car VARCHAR(255) NOT NULL,
-    type_car VARCHAR(255) NOT NULL,
-    nom_car VARCHAR(9) NOT NULL,
-    poll_created SMALLINT NOT NULL DEFAULT 0
-);
+require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
+Loader::includeModule("main");
 
--- Таблица отзывов
-CREATE TABLE qr_schema.feedback (
-    id_feedback SERIAL PRIMARY KEY,
-    id_car INT NOT NULL,
-    move_time SMALLINT NOT NULL,
-    clean SMALLINT NOT NULL,
-    driver_clean SMALLINT NOT NULL,
-    driver_tactic SMALLINT NOT NULL,
-    move_safety SMALLINT NOT NULL,
-    move_comfort SMALLINT NOT NULL,
-    smell_cabin SMALLINT NOT NULL,
-    volume_music SMALLINT NOT NULL,
-    temperature_cabin SMALLINT NOT NULL,
-    comment VARCHAR(2024),
-    comment_date DATE,
-    telephone VARCHAR(15),
-    CONSTRAINT fk_car FOREIGN KEY (id_car)
-        REFERENCES qr_schema.cars (id_car)
-        ON DELETE CASCADE
-);
+$connection = Application::getConnection();
+$sqlHelper  = $connection->getSqlHelper();
 
--- Индекс для ускорения поиска по автомобилю
-CREATE INDEX idx_feedback_car ON qr_schema.feedback (id_car);
+$carId = (int)$_POST['car_id'];
+
+if ($carId > 0)
+{
+    $connection->queryExecute("
+        UPDATE cars
+        SET poll_created = TRUE
+        WHERE id_car = {$carId}
+    ");
+    echo json_encode(['success' => true]);
+}
+else
+{
+    echo json_encode(['success' => false, 'error' => 'Invalid car_id']);
+}
 ```
 
 ---
 
-## 🧭 4. (Опционально) Установи путь поиска схем
+## 📁 Файл `load_blocks.php` (чтение списка машин)
 
-Если ты часто будешь работать именно с этой схемой — можешь указать её первой в `search_path`, чтобы не писать `qr_schema.` перед таблицами:
+```php
+<?php
+use Bitrix\Main\Loader;
+use Bitrix\Main\Application;
 
-```sql
-SET search_path TO qr_schema, public;
+require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
+Loader::includeModule("main");
+
+$connection = Application::getConnection();
+
+$result = $connection->query("
+    SELECT id_car, name_car, type_car, nom_car
+    FROM cars
+    ORDER BY id_car DESC
+");
+
+$data = [];
+while ($row = $result->fetch())
+{
+    $data[] = $row;
+}
+
+echo json_encode($data);
 ```
 
-> ⚠️ Не делай это глобально в конфигурации Битрикс — только в своей сессии или подключении через pgAdmin.
-
 ---
 
-## ✅ 5. Проверка
+## 📁 Файл `remove_block.php` (удаление записи)
 
-Чтобы убедиться, что всё создалось корректно:
+```php
+<?php
+use Bitrix\Main\Application;
+use Bitrix\Main\Loader;
 
-```sql
-SELECT schema_name
-FROM information_schema.schemata
-WHERE schema_name = 'qr_schema';
+require($_SERVER["DOCUMENT_ROOT"]."/bitrix/modules/main/include/prolog_before.php");
+Loader::includeModule("main");
 
-SELECT * FROM qr_schema.cars;
+$connection = Application::getConnection();
+$carId = (int)$_POST['id_car'];
+
+if ($carId > 0)
+{
+    $connection->queryExecute("DELETE FROM cars WHERE id_car = {$carId}");
+    echo json_encode(['success' => true]);
+}
+else
+{
+    echo json_encode(['success' => false, 'error' => 'Invalid car_id']);
+}
 ```
 
-Если запросы выполняются без ошибок — всё в порядке.
-Битрикс продолжит работать со своей схемой `public`, а твои таблицы живут отдельно и не мешают системе.
+---
+
+## ⚙️ Что нужно ещё сделать
+
+1. **В `/bitrix/.settings.php`**:
+
+   ```php
+   'connections' => [
+       'value' => [
+           'default' => [
+               'className' => '\\Bitrix\\Main\\DB\\PgsqlConnection',
+               'host' => 'localhost',
+               'database' => 'mydb',
+               'login' => 'myuser',
+               'password' => 'mypassword',
+               'options' => 2,
+           ],
+       ],
+   ],
+   ```
+
+2. **В базе PostgreSQL**:
+   Убедитесь, что таблица `cars` создана правильно:
+
+   ```sql
+   CREATE TABLE cars (
+       id_car SERIAL PRIMARY KEY,
+       name_car VARCHAR(255),
+       type_car VARCHAR(255),
+       nom_car  VARCHAR(255),
+       poll_created BOOLEAN DEFAULT FALSE
+   );
+   ```
 
 ---
 
-## 💡 Резюме
-
-| Действие                                          | Безопасно для Битрикс | Комментарий                   |
-| ------------------------------------------------- | --------------------- | ----------------------------- |
-| Создание новой схемы (`CREATE SCHEMA`)            | ✅                     | Полностью безопасно           |
-| Создание таблиц в своей схеме                     | ✅                     | Изолировано от системы        |
-| Изменение `public` или `search_path` по умолчанию | ⚠️                    | Делай только для своей сессии |
-| Удаление или переименование объектов `public`     | ❌                     | Нарушит работу Битрикс        |
-
----
-
-Хочешь, я добавлю сюда SQL-запрос, чтобы сразу **добавить тестовые данные** в обе таблицы (`cars` и `feedback`) — для проверки связи и выборки?
+Если хочешь, я могу подготовить diff-патч (`.patch` файл), который можно применить напрямую к репозиторию на GitHub — всё будет уже готово к PostgreSQL и Bitrix ORM.
+Сделать такой патч?
