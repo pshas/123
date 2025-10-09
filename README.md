@@ -1,177 +1,138 @@
-Отлично ✅
-Тогда давай просто **переделаем SQL-запросы с MySQL на PostgreSQL**, без Bitrix-ORM и без лишней абстракции.
-Я покажу именно те изменения, которые нужно внести, чтобы код на PHP/PDO, работавший с MySQL, стал корректно работать с PostgreSQL.
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="/local/qr-opros/src/styles.css">
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <title>Document</title>
+</head>
 
----
-
-## 🔧 1. Подключение (PDO)
-
-### Было (MySQL)
-
-```php
-$pdo = new PDO(
-    "mysql:host=localhost;dbname=mydb;charset=utf8",
-    "user",
-    "pass",
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-);
-```
-
-### Стало (PostgreSQL)
-
-```php
-$pdo = new PDO(
-    "pgsql:host=localhost;port=5432;dbname=mydb",
-    "user",
-    "pass",
-    [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false
-    ]
-);
-$pdo->exec("SET client_encoding TO 'UTF8'");
-```
-
-> ⚠️ В `pgsql` нельзя указывать `charset` в DSN — только через `SET client_encoding`.
-
----
-
-## 📄 2. `add_block.php`
-
-### Было (MySQL)
-
-```php
-$stmt = $pdo->prepare("INSERT INTO cars (name_car, type_car, nom_car) VALUES (?, ?, ?)");
-$stmt->execute([$nameCar, $typeCar, $nomCar]);
-$carId = $pdo->lastInsertId();
-```
-
-### Стало (PostgreSQL)
-
-```php
-$stmt = $pdo->prepare("
-    INSERT INTO cars (name_car, type_car, nom_car)
-    VALUES (:name, :type, :nom)
-    RETURNING id_car
-");
-$stmt->execute([
-    ':name' => $nameCar,
-    ':type' => $typeCar,
-    ':nom'  => $nomCar
-]);
-$carId = (int)$stmt->fetchColumn();
-```
-
-> PostgreSQL не поддерживает `lastInsertId()` без указания sequence.
-> Используем `RETURNING id_car`, чтобы сразу получить ID.
-
----
-
-## 📄 3. `prepare.php`
-
-### Было (MySQL)
-
-```php
-$stmt = $pdo->prepare("UPDATE cars SET poll_created = 1 WHERE id_car = ?");
-$stmt->execute([$carId]);
-```
-
-### Стало (PostgreSQL)
-
-```php
-$stmt = $pdo->prepare("UPDATE cars SET poll_created = TRUE WHERE id_car = :id");
-$stmt->execute([':id' => $carId]);
-```
-
-> Булевые значения в PostgreSQL — `TRUE/FALSE`, не `1/0`.
-
----
-
-## 📄 4. `load_blocks.php`
-
-### Было (MySQL)
-
-```php
-$stmt = $pdo->query("SELECT id_car, name_car, type_car, nom_car FROM cars ORDER BY id_car DESC");
-$rows = $stmt->fetchAll();
-```
-
-### Стало (PostgreSQL)
-
-```php
-$stmt = $pdo->query("SELECT id_car, name_car, type_car, nom_car FROM cars ORDER BY id_car DESC");
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-```
-
-> Тут изменений почти нет — SQL-синтаксис совпадает.
-
----
-
-## 📄 5. `remove_block.php`
-
-### Было (MySQL)
-
-```php
-$stmt = $pdo->prepare("DELETE FROM cars WHERE id_car = ?");
-$stmt->execute([$id]);
-```
-
-### Стало (PostgreSQL)
-
-```php
-$stmt = $pdo->prepare("DELETE FROM cars WHERE id_car = :id");
-$stmt->execute([':id' => $id]);
-```
-
-> Формально одинаково, просто для единообразия можно использовать именованные параметры.
-
----
-
-## 🧱 6. Частые отличия MySQL → PostgreSQL
-
-| Особенность        | MySQL                | PostgreSQL                               |   |    |
-| ------------------ | -------------------- | ---------------------------------------- | - | -- |
-| Булевый тип        | `TINYINT(1)` с `0/1` | `BOOLEAN` с `TRUE/FALSE`                 |   |    |
-| Автоинкремент      | `AUTO_INCREMENT`     | `SERIAL` или `GENERATED ... AS IDENTITY` |   |    |
-| NOW()              | ✅                    | ✅                                        |   |    |
-| LIMIT              | `LIMIT offset,count` | `LIMIT count OFFSET offset`              |   |    |
-| Конкатенация строк | `CONCAT(a,b)`        | `a                                       |   | b` |
-| Escape ``` кавычки | ``` (бэктик)         | `"` (двойные кавычки)                    |   |    |
-
----
-
-## ✅ Пример полностью работающего `add_block.php` под PostgreSQL
-
-```php
 <?php
-$pdo = new PDO(
-    "pgsql:host=localhost;port=5432;dbname=mydb",
-    "user",
-    "pass",
-    [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::ATTR_EMULATE_PREPARES => false
-    ]
-);
-$pdo->exec("SET client_encoding TO 'UTF8'");
+//require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
+include "/local/qr-opros/phpqrcode/qrlib.php";
 
-$nameCar = $_POST['name_car'] ?? '';
-$typeCar = $_POST['type_car'] ?? '';
-$nomCar  = $_POST['nom_car'] ?? '';
+?>
+<script src="/local/qr-opros/jquery-3.6.0.min.js"></script>
+<script src="/local/qr-opros/load_blocks.php"></script>
 
-$stmt = $pdo->prepare("
-    INSERT INTO cars (name_car, type_car, nom_car)
-    VALUES (:name, :type, :nom)
-    RETURNING id_car
-");
-$stmt->execute([':name' => $nameCar, ':type' => $typeCar, ':nom' => $nomCar]);
-$id = (int)$stmt->fetchColumn();
+<body>
+<div>
 
-echo json_encode(['success' => true, 'id' => $id]);
-```
+</div>
+<div id='content'>
+<div id="blocks-container">
+</div>
+	<button id="addBlock">Добавить автомобиль</button>
+		<div id="modal" style="display: none;">
+			<h3>Добавить автомобиль</h3>
+ 			<label for="nameCar">Марка транспортного средства</label> <input type="text" id="nameCar"><br>
+ 			<br>
+ 			<label for="typeCar">Тип автомобиля</label> <input type="text" id="typeCar"><br>
+ 			<br>
+ 			<label for="nomCar">Регистрационный знак автомобиля</label> <input type="text" id="nomCar"><br>
+ 			<br>
+ 			<button id="saveBlock">Сохранить</button> <button id="cancel">Отмена</button>
+		</div>
+		<script>
+			$(document).ready(function() {
+				function loadBlocks() {
+					$.ajax({
+						url: 'load_blocks.php',
+						method: 'GET',
+						success: function(data) {
+							$('#blocks-container').html(data);
+						}
+					});
+				}
 
----
+			loadBlocks();
 
-Хочешь, я пройдусь по всем твоим файлам из репозитория `github.com/pshas/2134` и выдам готовую diff-версию (`.patch`) с переводом всех запросов на PostgreSQL (чтобы можно было просто применить)?
+		document.getElementById("print-btn").addEventListener("click", function() {
+		document.body.style.visibility = "hidden";
+		let printBtn = document.getElementById("printarea");
+		printBtn.style.visibility = "visible";
+		window.print();
+		document.body.style.visibility = "visible";
+	});
+
+
+
+			$('#addBlock').click(function() {
+				$('#modal').show();
+				$(this).hide();
+			});
+
+			$('#saveBlock').click(function() {
+				var nameCar =$('#nameCar').val();
+				var typeCar =$('#typeCar').val();
+				var nomCar =$('#nomCar').val();
+
+			$.ajax({
+				url: 'add_block.php',
+				method: 'POST',
+				data: { nameCar: nameCar, typeCar: typeCar, nomCar: nomCar},
+				success: function(blockData) {
+					console.log(blockData);
+					var block = JSON.parse(blockData);
+					$('#blocks-container').append(`
+						<div class="block" car-id="${block.id}"> 
+							<h3>${block.id}</h3>
+							<h4>${block.nameCar}</h4>
+							<p>${block.typeCar}</p>
+							<p>${block.nomCar}</p>
+							<a href="application/index.php?block_id=${block.id}" class="order-btn">Скачать qr</a><br />
+							<a href="application/index.php?block_id=${block.id}" class="order-btn">Тест отзыв</a><br />
+							<div class="remove-btn">Деактивировать</div>
+						</div>
+					`);
+					$('#modal').hide();
+					$('#blockTitle').val('');
+					$('#blockDescription').val('');
+					$('#addBlock').show();
+				}
+			});
+		});
+
+		$('#cancel').click(function() {
+			$('#modal').hide();
+			$('#blockTitle').val('');
+			$('#blockDescription').val('');
+			$('#addBlock').show();
+		});
+
+		$(document).on('click', '.remove-btn', function() {
+			const block = $(this).closest('.block');
+			const blockId = block.data('id');
+
+			$.ajax({
+				url: 'remove_block.php',
+				method: 'POST',
+				data: { id: blockId },
+				success: function() {
+					block.remove();
+				}
+			});
+		});
+	});
+	</script>
+
+<?php
+$blockId = isset($_GET['block_id']) ? intval($_GET['block_id']) : 0;
+		if ($blockId <= 0) {
+			return;
+		}
+
+
+/*
+$APPLICATION->IncludeComponent(
+		"qr_opros", // Папка /local/components/qr_opros
+		"",
+		[
+			"BLOCK_ID" => $blockId;
+			"FORM_ID" => "5678"
+		],
+		false
+	);
+*/
+?>
