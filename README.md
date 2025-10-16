@@ -1,12 +1,10 @@
-<?$APPLICATION->IncludeComponent(
-    "company:disk.manualdrive",
-    "",
-    [
-        "STORAGE_MODE" => "COMMON",          // тип хранилища (общий диск)
-        "COMMON_CODE"  => "shared_files_s1", // код общего диска
-        "FOLDER_PATH"  => "/Проекты/2025",   // путь к нужной папке
-        "CREATE_IF_NOT_EXISTS" => "Y",       // создавать путь при отсутствии
-        "ALLOW_UPLOAD" => "Y",               // разрешить загрузку
-        "ALLOW_CREATE_FOLDER" => "Y"         // разрешить создание подпапок
-    ]
-);?>
+[Error] 
+Call to undefined method Bitrix\Disk\File::getViewUrl() (0)
+/var/www/html/bx-site/local/components/company/disk.manualdrive/class.php:132
+#0: CompanyDiskManualDrive->executeComponent()
+	/var/www/html/bx-site/bitrix/modules/main/classes/general/component.php:668
+#1: CBitrixComponent->includeComponent(string, array, NULL, boolean)
+	/var/www/html/bx-site/bitrix/modules/main/classes/general/main.php:1195
+#2: CAllMain->IncludeComponent(string, string, array)
+	/var/www/html/bx-site/local/portal_hub/sites/probnik/index.php:8
+----------
